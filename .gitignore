@@ -6,6 +6,12 @@
 *.lo
 *.o
 *.obj
+*.elf
+*.hex
+*.bin
+*.uf2
+*.pioautobuild
+.sconsign.dblite
 
 # Precompiled Headers
 *.gch
@@ -39,3 +45,14 @@
 
 # debug information files
 *.dwo
+
+# PlatformIO
+.pio/
+
+# Dependencies downloaded by PlatformIO
+.piolibdeps/
+
+# Other common files to ignore
+*.log
+*.bak
+*~
