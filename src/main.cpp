@@ -1,14 +1,24 @@
+#include <Arduino.h>
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include "I2C_LCD.h" 
 
-// Initialize the LCD with I2C address 0x27, 16 columns, 2 rows
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// Constructor: (I2C Address, Pointer to Wire interface)
+// Note the '&' before Wire1. This passes the memory address of the object.
+I2C_LCD lcd(0x27, &Wire1);
 
 void setup() {
-  lcd.init(); // initialize the lcd
-  lcd.backlight(); // open the backlight
+  // 1. Initialize the I2C bus FIRST
+  // You must start the bus on your specific pins before the LCD tries to use it.
+  Wire1.begin(41, 40);
 
-  // Print "Hello World" to the LCD.
+  // 2. Initialize the LCD
+  // This library uses standard (Columns, Rows) order.
+  lcd.begin(16, 2); 
+  
+  // 3. Turn on the backlight (sometimes required depending on the specific module)
+  lcd.backlight(); 
+  
+  lcd.setCursor(0, 0);
   lcd.print("Hello World");
 }
 
