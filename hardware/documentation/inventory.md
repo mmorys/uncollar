@@ -96,11 +96,16 @@ Interfaces: USBC, GPIO
 
 ### LoRa
 
-**RFM69C 433MHz**
+**RFM69W 433MHz**
 
-- Quantity: 7
+- Quantity: 2
+
+**RFM95W 915MHz**
+
+- Quantity: 5
 
 [Hackaday reference](https://hackaday.io/page/20045-revolutionizing-wireless-communication-rfm69-4ch-remote-and-rf433-mhz-modules)
+[Sparkfun reference](https://cdn.sparkfun.com/assets/learn_tutorials/8/0/4/RFM95_96_97_98W.pdf)
 [Adafruit reference page](https://www.adafruit.com/product/3071)
 
 ## Power
