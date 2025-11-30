@@ -1,18 +1,31 @@
 #include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
 
-// put function declarations here:
-int myFunction(int, int);
+// Define the NeoPixel pin and number of pixels
+#define NEOPIXEL_PIN PIN_NEOPIXEL
+#define NUM_PIXELS 1
+
+// Create the NeoPixel strip object
+Adafruit_NeoPixel strip(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  // Set the NeoPixel power pin high
+  pinMode(NEOPIXEL_POWER, OUTPUT);
+  digitalWrite(NEOPIXEL_POWER, HIGH);
+
+  // Initialize the NeoPixel strip
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  // Set the pixel to red
+  strip.setPixelColor(0, strip.Color(255, 0, 0));
+  strip.show();
+  delay(500);
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  // Turn off the pixel
+  strip.setPixelColor(0, strip.Color(0, 0, 0));
+  strip.show();
+  delay(500);
 }
