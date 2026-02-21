@@ -1,141 +1,211 @@
-## Issue Tracking with bd (beads)
+# Uncollar Agent Instructions
 
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
+An open-source GPS-tracking dog collar project designed for pet owners who want to monitor their dog's location, set boundaries, and receive alerts via a LoRa-connected base station integrated with Home Assistant.
 
-### Why bd?
+## Project Overview
 
-- Dependency-aware: Track blockers and relationships between issues
-- Git-friendly: Auto-syncs to JSONL for version control
-- Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
+Uncollar aims to provide a fully hackable, low-power GPS tracking solution for dogs. The system consists of a collar equipped with GPS, LoRa radio, and optional sensors, communicating with a base station that interfaces with Home Assistant for seamless user interaction. The project reuses the housing from an electric fence dog collar and incorporates commercial off-the-shelf (COTS) electronics to keep costs low and customization high.
 
-### Quick Start
+### Key Objectives
 
-**Check for ready work:**
+- Open-source and modifiable design
+- Accurate GPS location tracking
+- Configurable boundary alerts (beep/vibration/shock for the dog, notifications for the owner)
+- Long-range communication via LoRa radio
+- Home Assistant integration for remote monitoring and control
+- Rechargeable, low-power operation
+
+### Features
+
+- **GPS Tracking**: Real-time location monitoring using GPS modules.
+- **Boundary Alerts**: Define virtual fences; alerts triggered when the dog crosses boundaries.
+- **LoRa Communication**: Reliable, long-range wireless communication between collar and base station.
+- **Home Assistant Integration**: Seamless UI for monitoring and configuration via MQTT.
+- **Low Power Design**: Optimized for battery life with rechargeable components.
+- **Open Source**: Fully hackable hardware and software under Apache 2.0 license.
+- **Optional Sensors**: IMU for activity detection and orientation.
+
+## Project Structure
+
+```
+uncollar/
+├── src/                    # Source code - main.cpp entrypoint
+│   └── main.cpp           # Main firmware entry point
+├── lib/                    # Reusable libraries (create subdirectories)
+├── tests/                  # Unit tests for library components
+├── docs/                   # Documentation files
+├── hardware/
+│   └── documentation/     # Hardware documentation
+├── platformio.ini         # PlatformIO configuration
+└── AGENTS.md              # This file
+```
+
+### Directory Rules
+
+| Directory | Purpose | When to Use |
+|-----------|---------|-------------|
+| `src/` | Main application code | For `main.cpp` or app-specific code |
+| `lib/` | Reusable libraries | When creating components used across multiple files |
+| `tests/` | Unit tests | When testing library components |
+| `docs/` | Documentation | When adding project documentation |
+| `hardware/documentation/` | Hardware docs | When documenting hardware decisions |
+
+**Rule**: Always prefer creating reusable libraries in `lib/` over putting all code in `main.cpp`.
+
+## Code Style Guidelines
+
+### Language and Framework
+
+- **Language**: C++ (Arduino framework)
+- **Platform**: ESP32 (PlatformIO)
+- **Libraries**: Arduino libraries and conventions
+
+### Coding Rules
+
+1. **File organization**:
+   - Entry point: `src/main.cpp`
+   - Libraries: `lib/<library_name>/`
+   - Tests: `tests/<test_name>.cpp`
+
+2. **Naming conventions**:
+   - Classes: `CamelCase` (e.g., `GpsManager`)
+   - Functions: `camelCase` (e.g., `getLocation()`)
+   - Constants: `SCREAMING_SNAKE_CASE` (e.g., `MAX_RETRIES`)
+   - Files: `snake_case` (e.g., `gps_manager.cpp`)
+
+3. **Code structure**:
+   - Use header guards in `.h` files
+   - Keep functions focused and single-purpose
+   - Add comments for complex logic
+   - Use meaningful variable names
+
+4. **Error handling**:
+   - Return error codes or use exceptions appropriately
+   - Log errors with meaningful messages
+   - Handle edge cases explicitly
+
+### Documentation
+
+- Write documentation in Markdown
+- Use mkdocs for publishing to GitHub pages
+- Document public APIs with parameters and return values
+
+## Hardware
+
+The project uses COTS components for ease of assembly and modification.
+
+### Collar Components
+
+- **Microcontroller**: Adafruit QT Py ESP32-S3 WiFi Dev Board
+- **GPS Module**: Adafruit Mini GPS PA1010D (with antenna)
+- **LoRa Radio**: RFM95W 915MHz transceiver
+- **IMU (Optional)**: Adafruit TDK InvenSense ICM-20948 9-DoF IMU
+- **Antenna**: Custom pigtail antenna
+- **Alert Mechanism**: Beeper (for audible alerts)
+- **Power**: Rechargeable battery (via Adafruit LiIon or LiPoly Charger BFF)
+
+### Base Station Components
+
+- **Microcontroller**: ESP-WROOM-32 ESP32S Development Board (with WiFi)
+- **LoRa Radio**: RFM95W 915MHz transceiver
+- **Antenna**: Custom pigtail antenna
+
+For a complete hardware inventory, see [hardware/documentation/inventory.md](hardware/documentation/inventory.md).
+
+### System Diagram
+
+```mermaid
+graph TD
+    subgraph Collar
+        A[ESP32-S3 Microcontroller]
+        B[Adafruit Mini GPS PA1010D]
+        C[RFM95W 915MHz LoRa Transceiver]
+        D[Adafruit ICM-20948 9-DoF IMU]
+        E[Beeper for Alerts]
+        A --> B
+        A --> C
+        A --> D
+        A --> E
+    end
+    subgraph Base_Station
+        F[ESP-WROOM-32 ESP32]
+        G[RFM95W 915MHz LoRa Transceiver]
+        H[WiFi Module]
+        F --> G
+        F --> H
+    end
+    C -.->|LoRa Communication| G
+    H --> I[Home Assistant]
+```
+
+## Testing
+
+### Test Organization
+
+- Create unit tests for library components in `tests/`
+- Each test file should focus on a single library or component
+- Use descriptive test names that explain what is being tested
+
+### Running Tests
+
 ```bash
-bd ready --json
+pio test
 ```
 
-**Create new issues:**
-```bash
-bd create "Issue title" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" -p 1 --deps discovered-from:bd-123 --json
-bd create "Subtask" --parent <epic-id> --json  # Hierarchical subtask (gets ID like epic-id.1)
-```
+### Test Conventions
 
-**Claim and update:**
-```bash
-bd update bd-42 --status in_progress --json
-bd update bd-42 --priority 1 --json
-```
+- Include `#include <unity.h>` or similar test framework
+- Use `TEST_ASSERT_*` macros for assertions
+- Document expected behavior in comments
 
-**Complete work:**
-```bash
-bd close bd-42 --reason "Completed" --json
-```
+---
 
-### Issue Types
+## Build and Run Instructions
 
-- `bug` - Something broken
-- `feature` - New functionality
-- `task` - Work item (tests, docs, refactoring)
-- `epic` - Large feature with subtasks
-- `chore` - Maintenance (dependencies, tooling)
-
-### Priorities
-
-- `0` - Critical (security, data loss, broken builds)
-- `1` - High (major features, important bugs)
-- `2` - Medium (default, nice-to-have)
-- `3` - Low (polish, optimization)
-- `4` - Backlog (future ideas)
-
-### Workflow for AI Agents
-
-1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task**: `bd update <id> --status in_progress`
-3. **Work on it**: Implement, test, document
-4. **Discover new work?** Create linked issue:
-   - `bd create "Found bug" -p 1 --deps discovered-from:<parent-id>`
-5. **Complete**: `bd close <id> --reason "Done"`
-6. **Commit together**: Always commit the `.beads/issues.jsonl` file together with the code changes so issue state stays in sync with code state
-
-### Auto-Sync
-
-bd automatically syncs with git:
-- Exports to `.beads/issues.jsonl` after changes (5s debounce)
-- Imports from JSONL when newer (e.g., after `git pull`)
-- No manual export/import needed!
-
-### GitHub Copilot Integration
-
-If using GitHub Copilot, also create `.github/copilot-instructions.md` for automatic instruction loading.
-Run `bd onboard` to get the content, or see step 2 of the onboard instructions.
-
-### MCP Server (Recommended)
-
-If using Claude or MCP-compatible clients, install the beads MCP server:
+### Build Firmware
 
 ```bash
-pip install beads-mcp
+pio run
 ```
 
-Add to MCP config (e.g., `~/.config/claude/config.json`):
-```json
-{
-  "beads": {
-    "command": "beads-mcp",
-    "args": []
-  }
-}
+### Upload to Device
+
+```bash
+pio run --target upload
 ```
 
-Then use `mcp__beads__*` functions instead of CLI commands.
+### Monitor Serial Output
 
-### Managing AI-Generated Planning Documents
-
-AI assistants often create planning and design documents during development:
-- PLAN.md, IMPLEMENTATION.md, ARCHITECTURE.md
-- DESIGN.md, CODEBASE_SUMMARY.md, INTEGRATION_PLAN.md
-- TESTING_GUIDE.md, TECHNICAL_DESIGN.md, and similar files
-
-**Best Practice: Use a dedicated directory for these ephemeral files**
-
-**Recommended approach:**
-- Create a `history/` directory in the project root
-- Store ALL AI-generated planning/design docs in `history/`
-- Keep the repository root clean and focused on permanent project files
-- Only access `history/` when explicitly asked to review past planning
-
-**Example .gitignore entry (optional):**
-```
-# AI planning documents (ephemeral)
-history/
+```bash
+pio device monitor
 ```
 
-**Benefits:**
-- ✅ Clean repository root
-- ✅ Clear separation between ephemeral and permanent documentation
-- ✅ Easy to exclude from version control if desired
-- ✅ Preserves planning history for archeological research
-- ✅ Reduces noise when browsing the project
+### Clean Build
 
-### CLI Help
+```bash
+pio run --target clean
+```
 
-Run `bd <command> --help` to see all available flags for any command.
-For example: `bd create --help` shows `--parent`, `--deps`, `--assignee`, etc.
+---
 
-### Important Rules
+## Safety and Restrictions
 
-- ✅ Use bd for ALL task tracking
-- ✅ Always use `--json` flag for programmatic use
-- ✅ Link discovered work with `discovered-from` dependencies
-- ✅ Check `bd ready` before asking "what should I work on?"
-- ✅ Store AI planning docs in `history/` directory
-- ✅ Run `bd <cmd> --help` to discover available flags
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
-- ❌ Do NOT clutter repo root with planning documents
+### What NOT To Do
 
-For more details, see README.md and QUICKSTART.md.
+1. **Do not modify**: License files, unless explicitly requested
+2. **Do not delete**: Existing tests without confirming with user
+3. **Do not commit**: Changes without review (use Review mode first)
+4. **Do not assume**: Always ask clarifying questions when uncertain
+
+### Best Practices
+
+1. **Backup before major changes**: Use the user's version control
+2. **Test incrementally**: Verify changes work before moving on
+3. **Document unknowns**: Note areas needing investigation
+4. **Ask for help**: Use Ask mode or ask_followup_question when stuck
+
+---
+
+## License
+
+This project is licensed under Apache 2.0. See [LICENSE](LICENSE) file for details.
