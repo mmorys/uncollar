@@ -143,6 +143,8 @@ graph TD
 ### Test Organization
 
 - Create unit tests for library components in `tests/`
+- Every subdirectory must begin with `test_`
+- Every file must begin with `test_`
 - Each test file should focus on a single library or component
 - Use descriptive test names that explain what is being tested
 

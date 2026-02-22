@@ -75,3 +75,6 @@ bd.sock
 ## Legacy database files
 db.sqlite
 bd.db
+
+## AI Files
+plans/
