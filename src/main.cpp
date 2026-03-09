@@ -6,6 +6,7 @@
 #include <Adafruit_GPS.h>
 #include <esp_sleep.h>
 #include "../lib/point_in_polygon/point_in_polygon.h"
+#include "../lib/config_manager/config_manager.h"
 
 // Uncomment to enable serial debugging output
 #define DEBUG_SERIAL
@@ -16,25 +17,18 @@
 // ============================================
 // CONFIGURATION
 // ============================================
+// Configuration is now managed by ConfigManager (see lib/config_manager/)
+// Values are stored in NVS and persist across power cycles.
+// On first boot, defaults are used and saved to NVS.
+
 constexpr uint32_t GPS_UPDATE_INTERVAL_SEC = 5;
 constexpr uint32_t GPS_FIX_TIMEOUT_SEC = 3;
-constexpr float DEFAULT_LATITUDE = 39.6416f;    // Default (configurable)
-constexpr float DEFAULT_LONGITUDE = -84.0812f;
 
-// ============================================
-// GEOFENCE BOUNDARY - Pre-defined polygon
-// ============================================
-// ~100m x 100m square boundary around default location
-constexpr GeoPoint BOUNDARY_VERTICES[] = {
-    {DEFAULT_LATITUDE - 0.0005f, DEFAULT_LONGITUDE - 0.0005f},  // SW corner
-    {DEFAULT_LATITUDE - 0.0005f, DEFAULT_LONGITUDE + 0.0005f},  // SE corner
-    {DEFAULT_LATITUDE + 0.0005f, DEFAULT_LONGITUDE + 0.0005f},  // NE corner
-    {DEFAULT_LATITUDE + 0.0005f, DEFAULT_LONGITUDE - 0.0005f}   // NW corner
-};
-constexpr size_t BOUNDARY_VERTEX_COUNT = sizeof(BOUNDARY_VERTICES) / sizeof(BOUNDARY_VERTICES[0]);
+// ConfigManager instance - handles NVS persistence
+extern ConfigManager configManager;
 
-// Geofence polygon instance
-Polygon boundary(BOUNDARY_VERTICES, BOUNDARY_VERTEX_COUNT);
+// Geofence polygon instance (initialized in setup after config loads)
+Polygon* boundary = nullptr;
 
 // Constructor: (I2C Address, Pointer to Wire interface)
 I2C_LCD lcd(0x27, &Wire1);
@@ -174,6 +168,16 @@ void setup() {
     Serial.println("Uncollar GPS Collar - Power Optimized");
     #endif
 
+    // Initialize configuration from NVS (or defaults on first boot)
+    if (!configManager.begin()) {
+        #ifdef DEBUG_SERIAL
+        Serial.println("Failed to initialize config manager!");
+        #endif
+    }
+    
+    // Get config values
+    const Config& cfg = configManager.getConfig();
+    
     // Initialize the I2C bus
     Wire1.begin(41, 40);
 
@@ -234,7 +238,7 @@ void setup() {
         
         // Check if inside geofence boundary
         GeoPoint currentPos = {lat_decimal, lon_decimal};
-        if (boundary.contains(currentPos)) {
+        if (boundary != nullptr && boundary->contains(currentPos)) {
             #ifdef DEBUG_SERIAL
             Serial.println("Inside bounds");
             #endif
@@ -279,7 +283,7 @@ void setup() {
         
         // Check if last known position is inside geofence boundary
         GeoPoint lastPos = {lastPosition.latitude, lastPosition.longitude};
-        if (boundary.contains(lastPos)) {
+        if (boundary != nullptr && boundary->contains(lastPos)) {
             Serial.println("Inside bounds");
         } else {
             Serial.println("Outside bounds");
@@ -306,3 +310,6 @@ void loop() {
     // Emergency: re-enter deep sleep
     enterDeepSleep();
 }
+
+// ConfigManager instance - defined here to ensure it's available globally
+ConfigManager configManager;
