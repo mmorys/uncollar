@@ -6,6 +6,9 @@
 // Uncomment to enable serial debugging output
 #define DEBUG_SERIAL
 
+// Uncomment to enable LCD debugging output
+// #define DEBUG_LCD
+
 // Constructor: (I2C Address, Pointer to Wire interface)
 // Note the '&' before Wire1. This passes the memory address of the object.
 I2C_LCD lcd(0x27, &Wire1);
@@ -24,11 +27,13 @@ void setup() {
   // Initialize the I2C bus
   Wire1.begin(41, 40);
 
+  #ifdef DEBUG_LCD
   // Initialize the LCD
   lcd.begin(16, 2); 
   lcd.backlight(); 
   lcd.setCursor(0, 0);
   lcd.print("Waiting for GPS");
+#endif
   
 #ifdef DEBUG_SERIAL
   Serial.println("Waiting for GPS");
@@ -70,8 +75,10 @@ void loop() // run over and over again
   if (millis() - timer > 2000) {
     timer = millis(); // reset the timer
     
+    #ifdef DEBUG_LCD
     // Clear the LCD
     lcd.clear();
+#endif
     
     if (GPS.fix) {
       // Convert latitude from DDMM.MMMMM to decimal degrees
@@ -79,9 +86,11 @@ void loop() // run over and over again
       float lat_minutes = GPS.latitude - (lat_degrees * 100);
       float lat_decimal = lat_degrees + (lat_minutes / 60.0);
       
+      #ifdef DEBUG_LCD
       lcd.setCursor(0, 0);
       lcd.print(lat_decimal, 6);
       lcd.print(GPS.lat);
+#endif
       
 #ifdef DEBUG_SERIAL
       Serial.print("Latitude: ");
@@ -94,9 +103,11 @@ void loop() // run over and over again
       float lon_minutes = GPS.longitude - (lon_degrees * 100);
       float lon_decimal = lon_degrees + (lon_minutes / 60.0);
       
+      #ifdef DEBUG_LCD
       lcd.setCursor(0, 1);
       lcd.print(lon_decimal, 6);
       lcd.print(GPS.lon);
+#endif
       
 #ifdef DEBUG_SERIAL
       Serial.print("Longitude: ");
@@ -104,9 +115,11 @@ void loop() // run over and over again
       Serial.println(GPS.lon);
 #endif
     } else {
+      #ifdef DEBUG_LCD
       // Display waiting message when no GPS fix
       lcd.setCursor(0, 0);
       lcd.print("Waiting for GPS");
+#endif
       
 #ifdef DEBUG_SERIAL
       Serial.println("Waiting for GPS");
