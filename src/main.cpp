@@ -3,6 +3,9 @@
 #include "I2C_LCD.h" 
 #include <Adafruit_GPS.h>
 
+// Uncomment to enable serial debugging output
+#define DEBUG_SERIAL
+
 // Constructor: (I2C Address, Pointer to Wire interface)
 // Note the '&' before Wire1. This passes the memory address of the object.
 I2C_LCD lcd(0x27, &Wire1);
@@ -13,6 +16,11 @@ Adafruit_GPS GPS(&Wire1);
 uint32_t timer = millis();
 
 void setup() {
+#ifdef DEBUG_SERIAL
+  // Initialize serial port for debugging
+  Serial.begin(115200);
+#endif
+
   // Initialize the I2C bus
   Wire1.begin(41, 40);
 
@@ -21,6 +29,10 @@ void setup() {
   lcd.backlight(); 
   lcd.setCursor(0, 0);
   lcd.print("Waiting for GPS");
+  
+#ifdef DEBUG_SERIAL
+  Serial.println("Waiting for GPS");
+#endif
 
   // Initialize the GPS
   GPS.begin(0x10);  // The I2C address to use is 0x10
@@ -71,6 +83,12 @@ void loop() // run over and over again
       lcd.print(lat_decimal, 6);
       lcd.print(GPS.lat);
       
+#ifdef DEBUG_SERIAL
+      Serial.print("Latitude: ");
+      Serial.print(lat_decimal, 6);
+      Serial.println(GPS.lat);
+#endif
+      
       // Convert longitude from DDMM.MMMMM to decimal degrees
       int lon_degrees = (int)(GPS.longitude / 100);
       float lon_minutes = GPS.longitude - (lon_degrees * 100);
@@ -79,10 +97,20 @@ void loop() // run over and over again
       lcd.setCursor(0, 1);
       lcd.print(lon_decimal, 6);
       lcd.print(GPS.lon);
+      
+#ifdef DEBUG_SERIAL
+      Serial.print("Longitude: ");
+      Serial.print(lon_decimal, 6);
+      Serial.println(GPS.lon);
+#endif
     } else {
       // Display waiting message when no GPS fix
       lcd.setCursor(0, 0);
       lcd.print("Waiting for GPS");
+      
+#ifdef DEBUG_SERIAL
+      Serial.println("Waiting for GPS");
+#endif
     }
   }
 }
