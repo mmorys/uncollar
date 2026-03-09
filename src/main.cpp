@@ -5,6 +5,7 @@
 #include "I2C_LCD.h"
 #include <Adafruit_GPS.h>
 #include <esp_sleep.h>
+#include "../lib/point_in_polygon/point_in_polygon.h"
 
 // Uncomment to enable serial debugging output
 #define DEBUG_SERIAL
@@ -19,6 +20,21 @@ constexpr uint32_t GPS_UPDATE_INTERVAL_SEC = 5;
 constexpr uint32_t GPS_FIX_TIMEOUT_SEC = 3;
 constexpr float DEFAULT_LATITUDE = 39.6416f;    // Default (configurable)
 constexpr float DEFAULT_LONGITUDE = -84.0812f;
+
+// ============================================
+// GEOFENCE BOUNDARY - Pre-defined polygon
+// ============================================
+// ~100m x 100m square boundary around default location
+constexpr GeoPoint BOUNDARY_VERTICES[] = {
+    {DEFAULT_LATITUDE - 0.0005f, DEFAULT_LONGITUDE - 0.0005f},  // SW corner
+    {DEFAULT_LATITUDE - 0.0005f, DEFAULT_LONGITUDE + 0.0005f},  // SE corner
+    {DEFAULT_LATITUDE + 0.0005f, DEFAULT_LONGITUDE + 0.0005f},  // NE corner
+    {DEFAULT_LATITUDE + 0.0005f, DEFAULT_LONGITUDE - 0.0005f}   // NW corner
+};
+constexpr size_t BOUNDARY_VERTEX_COUNT = sizeof(BOUNDARY_VERTICES) / sizeof(BOUNDARY_VERTICES[0]);
+
+// Geofence polygon instance
+Polygon boundary(BOUNDARY_VERTICES, BOUNDARY_VERTEX_COUNT);
 
 // Constructor: (I2C Address, Pointer to Wire interface)
 I2C_LCD lcd(0x27, &Wire1);
@@ -216,6 +232,18 @@ void setup() {
         // Store position for next hot-start
         storePosition(lat_decimal, lon_decimal);
         
+        // Check if inside geofence boundary
+        GeoPoint currentPos = {lat_decimal, lon_decimal};
+        if (boundary.contains(currentPos)) {
+            #ifdef DEBUG_SERIAL
+            Serial.println("Inside bounds");
+            #endif
+        } else {
+            #ifdef DEBUG_SERIAL
+            Serial.println("Outside bounds");
+            #endif
+        }
+        
         #ifdef DEBUG_LCD
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -248,6 +276,14 @@ void setup() {
         Serial.print(lastPosition.latitude, 6);
         Serial.print(", ");
         Serial.println(lastPosition.longitude, 6);
+        
+        // Check if last known position is inside geofence boundary
+        GeoPoint lastPos = {lastPosition.latitude, lastPosition.longitude};
+        if (boundary.contains(lastPos)) {
+            Serial.println("Inside bounds");
+        } else {
+            Serial.println("Outside bounds");
+        }
         #endif
     }
 
