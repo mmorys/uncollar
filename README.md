@@ -2,6 +2,18 @@
 
 An open-source GPS-tracking dog collar project designed for pet owners who want to monitor their dog's location, set boundaries, and receive alerts via a LoRa-connected base station integrated with Home Assistant.
 
+## Repository Structure
+
+This is a monorepo. Each system component has its own top-level directory:
+
+| Directory | Contents | Status |
+|---|---|---|
+| [`collar/`](collar/) | ESP32-S3 collar firmware — GPS, geofence, LoRa TX, deep sleep | Active |
+| [`basestation/`](basestation/) | ESP32 base station firmware — LoRa RX, WiFi, MQTT | Planned |
+| [`homeassistant/`](homeassistant/) | Home Assistant custom integration — device tracker, alerts, config UI | Planned |
+| [`hardware/`](hardware/) | Bill of materials and component documentation | Active |
+| [`docs/`](docs/) | Project-wide documentation (MkDocs) | Active |
+
 ## Description
 
 Uncollar aims to provide a fully hackable, low-power GPS tracking solution for dogs. The system consists of a collar equipped with GPS, LoRa radio, and optional sensors, communicating with a base station that interfaces with Home Assistant for seamless user interaction. The project reuses the housing from an electric fence dog collar and incorporates commercial off-the-shelf (COTS) electronics to keep costs low and customization high.
@@ -74,25 +86,58 @@ graph TD
 
 ## Software
 
-The software is designed to run on ESP32-based microcontrollers.
+The system has three software components:
 
-- **Collar Firmware**: Handles GPS data acquisition, boundary checking, LoRa transmission, and alert triggering. Written in C++ for efficiency.
-- **Base Station Firmware**: Receives LoRa data, processes it, and communicates with Home Assistant via MQTT. Preferably implemented using ESPHome for ease of configuration; falls back to raw C++ if ESPHome lacks required LoRa flexibility.
-- **Home Assistant Integration**: Uses MQTT for real-time data exchange, allowing users to view location, set boundaries, and receive alerts through the Home Assistant dashboard.
+- **Collar Firmware** (`collar/`): C++ / Arduino / PlatformIO. Handles GPS acquisition, geofence checking, LoRa transmission, and deep-sleep power management.
+- **Base Station Firmware** (planned): Receives LoRa packets from the collar and publishes to Home Assistant via MQTT. Target: ESPHome or raw C++ on an ESP32-WROOM.
+- **Home Assistant Integration** (planned): MQTT-based real-time location display, configurable geofence, and boundary-crossing alerts.
+
+### Collar Firmware Class Architecture
+
+Each subsystem exposes a pure-virtual C++ interface so implementations are swappable and testable on native (no hardware required).
+
+| Interface | Concrete class | Responsibility |
+|---|---|---|
+| `IConfigManager` | `ConfigManager` | Persist home position and geofence vertices to ESP32 NVS |
+| `IGpsManager` | `AdafruitGpsManager` | Initialize GPS, acquire fix, convert NMEA → decimal degrees |
+| `IPowerManager` | `Esp32PowerManager` | Disable WiFi/BT, enter deep sleep |
+| `IRadio` | `RFM95Radio` *(stub)* | LoRa packet TX/RX (to be wired to a driver) |
+| — | `Polygon` | Ray-casting point-in-polygon geofence test |
+
+**LoRa wire protocol** (defined in `collar/lib/radio/radio.h`, pure C++, shared with base station):
+
+| Message | Direction | Purpose |
+|---|---|---|
+| `PositionReport` | Collar → Base | Lat/lon, fix quality, inside/outside boundary, battery |
+| `BoundaryAlert` | Collar → Base | Immediate notification on boundary crossing |
+| `ConfigUpdate` | Base → Collar | Updated home position and geofence vertices |
 
 ### Software Architecture Diagram
 
 ```mermaid
 graph TD
-    A[Collar Firmware C++] --> B[GPS Data Acquisition]
-    A --> C[Boundary Checking Algorithm]
-    A --> D[LoRa Transmission]
-    A --> E[Alert Triggering Beep/Vibration]
-    F[Base Station Firmware ESPHome/C++] --> G[LoRa Reception]
-    F --> H[Data Processing & Storage]
-    F --> I[MQTT Publishing]
-    I --> J[Home Assistant]
-    J --> K[User Interface for Monitoring & Configuration]
+    subgraph Collar_Firmware
+        MAIN[main.cpp orchestrator]
+        GPS[AdafruitGpsManager]
+        GEO[Polygon geofence]
+        CFG[ConfigManager NVS]
+        PWR[Esp32PowerManager]
+        RADIO[RFM95Radio LoRa]
+        MAIN --> GPS
+        MAIN --> GEO
+        MAIN --> CFG
+        MAIN --> PWR
+        MAIN --> RADIO
+    end
+    subgraph Base_Station
+        BS[Base Station Firmware]
+        MQTT[MQTT Publisher]
+        BS --> MQTT
+    end
+    RADIO -.->|PositionReport / BoundaryAlert| BS
+    BS -.->|ConfigUpdate| RADIO
+    MQTT --> HA[Home Assistant]
+    HA --> UI[User Interface]
 ```
 
 ## Installation (Nominal - To Be Completed)

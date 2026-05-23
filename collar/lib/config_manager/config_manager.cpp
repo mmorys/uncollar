@@ -170,6 +170,15 @@ float ConfigManager::getDefaultLongitude() const {
     return _config.defaultLongitude;
 }
 
+GeoPoint ConfigManager::getDefaultPosition() const {
+    return {_config.defaultLatitude, _config.defaultLongitude};
+}
+
+void ConfigManager::setDefaultPosition(float lat, float lon) {
+    _config.defaultLatitude  = lat;
+    _config.defaultLongitude = lon;
+}
+
 const GeoPoint* ConfigManager::getBoundaryVertices() const {
     return _config.boundaryVertices;
 }

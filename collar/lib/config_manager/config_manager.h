@@ -65,20 +65,47 @@ struct Config {
 };
 
 // ============================================
+// ABSTRACT INTERFACE
+// ============================================
+
+/**
+ * @brief Abstract configuration manager interface.
+ *
+ * Decouples collar logic from the NVS storage backend so the config layer
+ * can be mocked in native unit tests.
+ */
+class IConfigManager {
+public:
+    virtual ~IConfigManager() = default;
+
+    virtual bool begin() = 0;
+    virtual bool load()  = 0;
+    virtual bool save()  = 0;
+    virtual bool resetToDefaults() = 0;
+
+    virtual GeoPoint        getDefaultPosition()   const = 0;
+    virtual const GeoPoint* getBoundaryVertices()  const = 0;
+    virtual size_t          getBoundaryVertexCount() const = 0;
+
+    virtual void setDefaultPosition(float lat, float lon) = 0;
+    virtual bool setBoundaryVertices(const GeoPoint* vertices, size_t count) = 0;
+};
+
+// ============================================
 // CONFIG MANAGER CLASS
 // ============================================
 
 /**
  * @brief Manages configuration persistence using ESP32 NVS.
- * 
+ *
  * This class provides an interface to load, save, and modify configuration
  * values that persist across power cycles. On first boot, default values
  * are used. When updated via LoRa (future feature), values persist.
- * 
+ *
  * @note This class allocates memory for boundary vertices. Ensure to call
  *       begin() before any other methods and handle memory appropriately.
  */
-class ConfigManager {
+class ConfigManager : public IConfigManager {
 public:
     /**
      * @brief Construct a new ConfigManager object.
@@ -100,35 +127,35 @@ public:
      * 
      * @return true if initialization successful, false on error
      */
-    bool begin();
+    bool begin() override;
 
     /**
      * @brief Load configuration from NVS.
-     * 
+     *
      * Reads values from NVS. If values are not found (first boot),
      * loads defaults and saves them to NVS.
-     * 
+     *
      * @return true if loaded successfully, false on error
      */
-    bool load();
+    bool load() override;
 
     /**
      * @brief Save current configuration to NVS.
-     * 
+     *
      * Persists all current configuration values to non-volatile storage.
-     * 
+     *
      * @return true if saved successfully, false on error
      */
-    bool save();
+    bool save() override;
 
     /**
      * @brief Reset configuration to defaults.
-     * 
+     *
      * Resets all values to default and saves to NVS.
-     * 
+     *
      * @return true if reset successful, false on error
      */
-    bool resetToDefaults();
+    bool resetToDefaults() override;
 
     // ============================================
     // GETTERS
@@ -150,13 +177,18 @@ public:
      * @brief Get the boundary vertices.
      * @return Pointer to array of GeoPoint vertices.
      */
-    const GeoPoint* getBoundaryVertices() const;
+    const GeoPoint* getBoundaryVertices() const override;
 
     /**
      * @brief Get the number of boundary vertices.
      * @return Number of vertices in the boundary polygon.
      */
-    size_t getBoundaryVertexCount() const;
+    size_t getBoundaryVertexCount() const override;
+
+    /**
+     * @brief Get the default home position as a GeoPoint.
+     */
+    GeoPoint getDefaultPosition() const override;
 
     /**
      * @brief Get the complete configuration struct.
@@ -167,6 +199,11 @@ public:
     // ============================================
     // SETTERS (for LoRa updates)
     // ============================================
+
+    /**
+     * @brief Set the default home position.
+     */
+    void setDefaultPosition(float lat, float lon) override;
 
     /**
      * @brief Set the default latitude.
@@ -189,7 +226,7 @@ public:
      * @param count Number of vertices (must be >= MIN_BOUNDARY_VERTICES).
      * @return true if set successfully, false on invalid count.
      */
-    bool setBoundaryVertices(const GeoPoint* vertices, size_t count);
+    bool setBoundaryVertices(const GeoPoint* vertices, size_t count) override;
 
     /**
      * @brief Check if configuration has been initialized.
