@@ -113,7 +113,7 @@ void setup() {
 #endif
 
     // LoRa: send position, listen for config update
-    RFM95Radio radio;
+    RFM95Radio radio(RFM95Config{17, 33, 18, 433.0f, 17});
     if (radio.begin()) {
         PositionReport report = {
             pos.lat, pos.lon,

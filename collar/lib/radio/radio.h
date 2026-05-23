@@ -125,15 +125,35 @@ public:
 
 #ifdef ARDUINO
 
+#include <RadioLib.h>
+#include <SPI.h>
+
 /**
- * @brief IRadio stub for the HopeRF RFM95 LoRa module.
+ * @brief SPI pin and RF settings for the RFM95W module.
  *
- * Not yet wired to a hardware driver. Provides the interface so that
- * main.cpp can be written against it; replace the stub methods with
- * RadioLib (or equivalent) calls when the hardware is available.
+ * Suggested GPIO assignments for the Adafruit QT Py ESP32-S3 — see
+ * collar/WIRING.md for the full connection diagram.
+ */
+struct RFM95Config {
+    int   csPin;     ///< SPI chip select (NSS), e.g. 17 (A0)
+    int   dio0Pin;   ///< Packet-done interrupt (DIO0), e.g. 33 (A2)
+    int   rstPin;    ///< Hardware reset, e.g. 18 (A1)
+    float frequency; ///< Carrier frequency in MHz (433.0 EU / 915.0 US)
+    int   txPower;   ///< TX output power in dBm, 2–20 for RFM95W
+};
+
+/**
+ * @brief IRadio implementation for the HopeRF RFM95W LoRa module via RadioLib.
+ *
+ * Uses the FSPI bus (SCK=36, MISO=37, MOSI=35) and the pin assignments
+ * supplied in RFM95Config. Wire format: 1-byte MessageType prefix followed
+ * by the packed struct payload.
  */
 class RFM95Radio : public IRadio {
 public:
+    explicit RFM95Radio(const RFM95Config& config);
+    ~RFM95Radio() override;
+
     bool begin() override;
     bool sendPositionReport(const PositionReport& report) override;
     bool sendBoundaryAlert(const BoundaryAlert& alert) override;
@@ -141,7 +161,11 @@ public:
     int  lastRssi() const override;
 
 private:
-    int _lastRssi = 0;
+    RFM95Config _config;
+    SPIClass*   _spi   = nullptr;
+    Module*     _mod   = nullptr;
+    SX1276*     _radio = nullptr;
+    int         _lastRssi = 0;
 };
 
 #endif // ARDUINO
