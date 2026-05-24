@@ -14,6 +14,9 @@
 // Uncomment to enable LCD debugging output
 // #define DEBUG_LCD
 
+// Uncomment to disable deep sleep (keeps USB-CDC alive for serial monitoring)
+// #define DEBUG_NO_DEEP_SLEEP
+
 // ============================================
 // TIMING CONSTANTS
 // ============================================
@@ -46,48 +49,25 @@ I2C_LCD lcd(0x27, &Wire1);
 #endif
 
 // ============================================
-// SETUP — runs on every wake from deep sleep
+// SENSOR CYCLE — GPS fix + geofence + radio
 // ============================================
 
-void setup() {
-#ifdef DEBUG_SERIAL
-    Serial.begin(115200);
-    Serial.println("Uncollar GPS Collar");
-#endif
-
-    Esp32PowerManager power;
-    power.disableUnusedPeripherals();
-
-    Wire1.begin(kI2c1Sda, kI2c1Scl);
-
-    if (!configManager.begin()) {
-#ifdef DEBUG_SERIAL
-        Serial.println("Config init failed");
-#endif
-    }
-
-#ifdef DEBUG_LCD
-    lcd.begin(16, 2);
-    lcd.backlight();
-    lcd.setCursor(0, 0);
-    lcd.print("Acquiring GPS...");
-#endif
-
+static void runCycle() {
     AdafruitGpsManager gps(Wire1);
-    if (!gps.begin()) {
+    bool gpsReady = gps.begin();
+    if (gpsReady) {
+        gps.wake();
+        delay(100);
 #ifdef DEBUG_SERIAL
-        Serial.println("GPS init failed — chip did not ACK on I2C");
+        Serial.println("Waiting for GPS fix...");
+#endif
+        gps.waitForFix(GPS_FIX_TIMEOUT_MS);
+    } else {
+#ifdef DEBUG_SERIAL
+        Serial.println("GPS init failed — chip did not ACK on I2C; using last known position");
 #endif
     }
-    gps.wake();
-    delay(100);
-
-#ifdef DEBUG_SERIAL
-    Serial.println("Waiting for GPS fix...");
-#endif
-
-    bool hasFix = gps.waitForFix(GPS_FIX_TIMEOUT_MS);
-    GpsFix fix  = gps.getLastFix();
+    GpsFix fix = gps.getLastFix();
 
     if (fix.valid) {
         lastFix = fix;
@@ -144,16 +124,59 @@ void setup() {
 #endif
         }
     }
-
-    gps.sleep();
-    power.enterDeepSleep(GPS_UPDATE_INTERVAL_US);
+    // Note: gps.sleep() intentionally omitted — PMTK_STANDBY disables I2C ACK
+    // on the PA1010D, requiring a full power cycle to recover. The ESP32's own
+    // deep sleep cuts system power; the GPS chip's idle draw is acceptable.
 }
 
 // ============================================
-// LOOP — never reached due to deep sleep model
+// SETUP — runs on every wake from deep sleep
+// ============================================
+
+void setup() {
+#ifdef DEBUG_SERIAL
+    Serial.begin(115200);
+    Serial.println("Uncollar GPS Collar");
+#endif
+
+    Wire1.begin(kI2c1Sda, kI2c1Scl);
+
+    Esp32PowerManager power;
+    power.disableUnusedPeripherals();
+
+    if (!configManager.begin()) {
+#ifdef DEBUG_SERIAL
+        Serial.println("Config init failed");
+#endif
+    }
+
+#ifdef DEBUG_LCD
+    lcd.begin(16, 2);
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Acquiring GPS...");
+#endif
+
+    runCycle();
+
+#ifndef DEBUG_NO_DEEP_SLEEP
+    Esp32PowerManager sleepPower;
+    sleepPower.enterDeepSleep(GPS_UPDATE_INTERVAL_US);
+#endif
+}
+
+// ============================================
+// LOOP — repeats cycle in debug mode; enters
+//        deep sleep in production (never reached)
 // ============================================
 
 void loop() {
+#ifdef DEBUG_NO_DEEP_SLEEP
+    delay(GPS_UPDATE_INTERVAL_US / 1000);
+    Serial.println("--- next cycle ---");
+    runCycle();
+#else
     Esp32PowerManager power;
     power.enterDeepSleep(GPS_UPDATE_INTERVAL_US);
+#endif
 }

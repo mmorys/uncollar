@@ -29,11 +29,12 @@ AdafruitGpsManager::AdafruitGpsManager(TwoWire& wire)
     : _gps(&wire), _lastFix{{0.0f, 0.0f}, 0, 0.0f, 0, false} {}
 
 bool AdafruitGpsManager::begin() {
-    // The PA1010D needs a brief moment to be ready on I2C after power-on.
-    // Adafruit_GPS::begin() returns false if the chip doesn't ACK its address;
-    // retry until it does (up to ~2 s total) before giving up.
-    constexpr int      kMaxRetries    = 20;
-    constexpr uint32_t kRetryDelayMs  = 100;
+    // The PA1010D can take several seconds after a cold power-on before it
+    // ACKs on I2C. gps_demo only works because `while (!Serial)` happens to
+    // burn 1-3 s of USB CDC enumeration before the first probe — main.cpp
+    // has no equivalent wait, so retry the probe for up to ~5 s.
+    constexpr int      kMaxRetries   = 50;
+    constexpr uint32_t kRetryDelayMs = 100;
     for (int i = 0; i < kMaxRetries; i++) {
         if (_gps.begin(0x10)) {
             _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
