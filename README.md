@@ -9,7 +9,7 @@ This is a monorepo. Each system component has its own top-level directory:
 | Directory | Contents | Status |
 |---|---|---|
 | [`collar/`](collar/) | ESP32-S3 collar firmware — GPS, geofence, LoRa TX, deep sleep | Active |
-| [`basestation/`](basestation/) | ESP32 base station firmware — LoRa RX, WiFi, MQTT | Planned |
+| [`basestation/`](basestation/) | ESP32 base station firmware — LoRa RX, WiFi, Home Assistant via ESPHome | Active |
 | [`homeassistant/`](homeassistant/) | Home Assistant custom integration — device tracker, alerts, config UI | Planned |
 | [`hardware/`](hardware/) | Bill of materials and component documentation | Active |
 | [`docs/`](docs/) | Project-wide documentation (MkDocs) | Active |
@@ -31,7 +31,7 @@ Key objectives:
 - **GPS Tracking**: Real-time location monitoring using GPS modules.
 - **Boundary Alerts**: Define virtual fences; alerts triggered when the dog crosses boundaries.
 - **LoRa Communication**: Reliable, long-range wireless communication between collar and base station.
-- **Home Assistant Integration**: Seamless UI for monitoring and configuration via MQTT.
+- **Home Assistant Integration**: Seamless UI for monitoring and configuration via ESPHome native API.
 - **Low Power Design**: Optimized for battery life with rechargeable components.
 - **Open Source**: Fully hackable hardware and software under Apache 2.0 license.
 - **Optional Sensors**: IMU for activity detection and orientation.
@@ -52,7 +52,7 @@ The project uses COTS components for ease of assembly and modification.
 
 ### Base Station Components
 
-- **Microcontroller**: ESP-WROOM-32 ESP32S Development Board (with WiFi)
+- **Microcontroller**: Adafruit QT Py ESP32 Pico
 - **LoRa Radio**: RFM95W 915MHz transceiver
 - **Antenna**: Custom pigtail antenna
 
@@ -74,14 +74,12 @@ graph TD
         A --> E
     end
     subgraph Base_Station
-        F[ESP-WROOM-32 ESP32]
+        F[QT Py ESP32 Pico - ESPHome]
         G[RFM95W 915MHz LoRa Transceiver]
-        H[WiFi Module]
         F --> G
-        F --> H
     end
     C -.->|LoRa Communication| G
-    H --> I[Home Assistant]
+    F -->|ESPHome native API| I[Home Assistant]
 ```
 
 ## Software
@@ -89,7 +87,7 @@ graph TD
 The system has three software components:
 
 - **Collar Firmware** (`collar/`): C++ / Arduino / PlatformIO. Handles GPS acquisition, geofence checking, LoRa transmission, and deep-sleep power management.
-- **Base Station Firmware** (planned): Receives LoRa packets from the collar and publishes to Home Assistant via MQTT. Target: ESPHome or raw C++ on an ESP32-WROOM.
+- **Base Station Firmware** (`basestation/`): ESPHome on an Adafruit QT Py ESP32 Pico. Receives LoRa packets from the collar via the SX127x component and exposes position, boundary status, and signal strength as native Home Assistant entities over the ESPHome API.
 - **Home Assistant Integration** (planned): MQTT-based real-time location display, configurable geofence, and boundary-crossing alerts.
 
 ### Collar Firmware Class Architecture
@@ -130,13 +128,13 @@ graph TD
         MAIN --> RADIO
     end
     subgraph Base_Station
-        BS[Base Station Firmware]
-        MQTT[MQTT Publisher]
-        BS --> MQTT
+        BS[ESPHome on QT Py ESP32 Pico]
+        SX[sx127x LoRa component]
+        BS --> SX
     end
-    RADIO -.->|PositionReport / BoundaryAlert| BS
-    BS -.->|ConfigUpdate| RADIO
-    MQTT --> HA[Home Assistant]
+    RADIO -.->|PositionReport / BoundaryAlert| SX
+    SX -.->|ConfigUpdate| RADIO
+    BS -->|ESPHome native API| HA[Home Assistant]
     HA --> UI[User Interface]
 ```
 
@@ -154,10 +152,10 @@ graph TD
 4. Test boundary alerts.
 
 ### Base Station Setup
-1. Assemble base station hardware.
-2. Install ESPHome or flash custom C++ firmware.
-3. Configure LoRa and MQTT connections.
-4. Integrate with Home Assistant via MQTT discovery.
+1. Wire RFM95W to QT Py ESP32 Pico — see [basestation/WIRING.md](basestation/WIRING.md).
+2. Copy `basestation/esphome/secrets.yaml.example` to `secrets.yaml` and fill in WiFi, OTA password, and LoRa sync word.
+3. Install via ESPHome dashboard or CLI (`esphome upload basestation/esphome/basestation.yaml`).
+4. Add to Home Assistant — entities appear automatically via ESPHome native API.
 
 Detailed setup instructions will be added as development progresses.
 
