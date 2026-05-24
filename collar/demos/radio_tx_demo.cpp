@@ -23,7 +23,9 @@ void setup() {
     delay(2000);
 
     Serial.println("=== Radio TX demo ===");
-    Serial.println("SPI:  SCK=36 MISO=37 MOSI=35");
+    Serial.print("SPI:  SCK="); Serial.print(kSpiSck);
+    Serial.print(" MISO=");    Serial.print(kSpiMiso);
+    Serial.print(" MOSI=");    Serial.println(kSpiMosi);
     Serial.print  ("Pins: CS=");  Serial.print(kRadioConfig.csPin);
     Serial.print  (" DIO0=");     Serial.print(kRadioConfig.dio0Pin);
     Serial.print  (" RST=");      Serial.println(kRadioConfig.rstPin);
