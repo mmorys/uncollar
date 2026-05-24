@@ -135,9 +135,9 @@ public:
  * collar/WIRING.md for the full connection diagram.
  */
 struct RFM95Config {
-    int   csPin;     ///< SPI chip select (NSS), e.g. 17 (A0)
-    int   dio0Pin;   ///< Packet-done interrupt (DIO0), e.g. 33 (A2)
-    int   rstPin;    ///< Hardware reset, e.g. 18 (A1)
+    int   csPin;     ///< SPI chip select (NSS) — A0 = GPIO18 on QT Py ESP32-S3
+    int   dio0Pin;   ///< Packet-done interrupt (DIO0)
+    int   rstPin;    ///< Hardware reset; use RADIOLIB_NC (-1) if unconnected
     float frequency; ///< Carrier frequency in MHz (433.0 EU / 915.0 US)
     int   txPower;   ///< TX output power in dBm, 2–20 for RFM95W
 };

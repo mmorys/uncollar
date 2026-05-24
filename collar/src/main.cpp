@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include "pins.h"
 #include "I2C_LCD.h"
 #include "../lib/point_in_polygon/point_in_polygon.h"
 #include "../lib/config_manager/config_manager.h"
@@ -56,7 +57,7 @@ void setup() {
     Esp32PowerManager power;
     power.disableUnusedPeripherals();
 
-    Wire1.begin(41, 40);
+    Wire1.begin(kI2c1Sda, kI2c1Scl);
 
     if (!configManager.begin()) {
 #ifdef DEBUG_SERIAL
@@ -113,7 +114,7 @@ void setup() {
 #endif
 
     // LoRa: send position, listen for config update
-    RFM95Radio radio(RFM95Config{17, 33, 18, 433.0f, 17});
+    RFM95Radio radio(RFM95Config{kRadioCs, kRadioDio0, kRadioRst, 915.0f, 17});
     if (radio.begin()) {
         PositionReport report = {
             pos.lat, pos.lon,

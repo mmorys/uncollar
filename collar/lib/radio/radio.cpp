@@ -30,9 +30,43 @@ RFM95Radio::~RFM95Radio() {
     delete _spi;
 }
 
+// Read one byte from an SX1276 register directly over SPI (no RadioLib).
+// Useful for checking SPI wiring before RadioLib init.
+static uint8_t spiReadReg(SPIClass& spi, int csPin, uint8_t reg) {
+    spi.beginTransaction(SPISettings(100000, MSBFIRST, SPI_MODE0));
+    digitalWrite(csPin, LOW);
+    spi.transfer(reg & 0x7F);  // read: MSB = 0
+    uint8_t val = spi.transfer(0x00);
+    digitalWrite(csPin, HIGH);
+    spi.endTransaction();
+    return val;
+}
+
 bool RFM95Radio::begin() {
     _spi = new SPIClass(FSPI);
     _spi->begin(kSpiSck, kSpiMiso, kSpiMosi, _config.csPin);
+    pinMode(_config.csPin, OUTPUT);
+    digitalWrite(_config.csPin, HIGH);
+
+    if (_config.rstPin != RADIOLIB_NC) {
+        pinMode(_config.rstPin, OUTPUT);
+        digitalWrite(_config.rstPin, LOW);
+        delay(10);
+        digitalWrite(_config.rstPin, HIGH);
+        delay(10);
+    }
+
+    // Raw SPI read of the version register (0x42) — SX1276 should return 0x12
+    uint8_t version = spiReadReg(*_spi, _config.csPin, 0x42);
+    Serial.print("SX1276 version reg (0x42): 0x");
+    Serial.print(version, HEX);
+    if (version == 0x12) {
+        Serial.println(" — chip found");
+    } else if (version == 0x00 || version == 0xFF) {
+        Serial.println(" — SPI not responding (check MISO/MOSI/CLK/CS wiring)");
+    } else {
+        Serial.println(" — unexpected value (wrong chip or wiring issue)");
+    }
 
     _mod   = new Module(_config.csPin, _config.dio0Pin, _config.rstPin,
                         RADIOLIB_NC, *_spi);
@@ -43,10 +77,13 @@ bool RFM95Radio::begin() {
         125.0f,            // bandwidth kHz
         9,                 // spreading factor
         7,                 // coding rate denominator (4/7)
-        SX127X_SYNC_WORD,
+        RADIOLIB_SX127X_SYNC_WORD,
         _config.txPower,
         8                  // preamble length symbols
     );
+    Serial.print("RadioLib SX1276::begin() state: ");
+    Serial.print(state);
+    Serial.println(state == RADIOLIB_ERR_NONE ? " (OK)" : " (RADIOLIB_ERR_CHIP_NOT_FOUND=-2, RADIOLIB_ERR_SPI_CMD_FAILED=-3)");
     return state == RADIOLIB_ERR_NONE;
 }
 
