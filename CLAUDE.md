@@ -19,20 +19,17 @@ The collar tracks GPS position, checks it against a configurable geofence polygo
 All PlatformIO commands are run from the `collar/` directory (or with `--project-dir collar/` from the repo root).
 
 ```bash
-# Build firmware (adafruit_qtpy_esp32s3_nopsram; native env prints "Nothing to build" — expected)
+# Build firmware (mcu env; native env prints "Nothing to build" — expected)
 pio run --project-dir collar/
 
 # Upload to device (Adafruit QT Py ESP32-S3)
-pio run --project-dir collar/ --target upload
+pio run --project-dir collar/ -e mcu --target upload
 
 # Monitor serial output (115200 baud)
 pio device monitor --project-dir collar/
 
 # Run host-side unit tests (no hardware needed)
 pio test -e native --project-dir collar/
-
-# Run all tests (native + arduino-specific)
-pio test --project-dir collar/
 
 # Clean build artifacts
 pio run --project-dir collar/ --target clean
@@ -42,8 +39,9 @@ pio run --project-dir collar/ --target clean
 
 **Execution model**: The firmware runs entirely in `setup()` — `loop()` is never reached. Each wake cycle from deep sleep re-runs `setup()`, acquires a GPS fix, checks the geofence, then re-enters deep sleep via `esp_deep_sleep_start()`. Last known position survives deep sleep in `RTC_DATA_ATTR` memory.
 
-**Two PlatformIO environments**:
-- `adafruit_qtpy_esp32s3_nopsram` — target hardware (ESP32-S3); runs `test_arduino` tests only
+**PlatformIO environments**:
+- `mcu` — target hardware (Adafruit QT Py ESP32-S3); production firmware
+- `gps_demo`, `radio_tx_demo`, `spi_raw_demo` — single-purpose hardware diagnostic sketches in `collar/demos/`
 - `native` — host machine; runs `test_native*` tests only (no Arduino dependencies)
 
 **Library layout** (`collar/lib/`): Each reusable component lives in its own subdirectory with a `.h`/`.cpp` pair. Every subsystem exposes a pure-virtual interface (prefix `I`) so concrete implementations can be swapped or mocked in native tests. Prefer adding code here over expanding `collar/src/main.cpp`.
