@@ -1,0 +1,113 @@
+esphome:
+  name: uncollar-basestation
+  includes:
+    - uncollar_protocol.h
+
+esp32:
+  board: adafruit_qtpy_esp32
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Uncollar Basestation"
+
+captive_portal:
+
+api:
+
+ota:
+  - platform: esphome
+    password: !secret basestation_ota_password
+
+logger:
+
+spi:
+  clk_pin: GPIO14
+  mosi_pin: GPIO13
+  miso_pin: GPIO12
+  interface: spi2
+
+sx127x:
+  cs_pin: GPIO26
+  rst_pin: GPIO25
+  dio0_pin: GPIO27
+  frequency: 915000000
+  modulation: LORA
+  bandwidth: 125_0kHz
+  spreading_factor: 9
+  coding_rate: CR_4_7
+  sync_value: !secret lora_sync_word
+  pa_pin: BOOST
+  pa_power: 17
+  preamble_size: 8
+  on_packet:
+    - lambda: |-
+        if (x.size() < 1) return;
+        uint8_t msg_type = x[0];
+
+        if (msg_type == (uint8_t)MessageType::PositionReport
+            && x.size() == 1 + sizeof(PositionReport)) {
+          PositionReport r;
+          memcpy(&r, x.data() + 1, sizeof(r));
+          id(dog_latitude).publish_state(r.latitude);
+          id(dog_longitude).publish_state(r.longitude);
+          id(dog_satellites).publish_state(r.satellites);
+          id(dog_battery_mv).publish_state(r.batteryMv);
+          id(dog_inside_boundary).publish_state(r.insideBoundary);
+          id(lora_rssi).publish_state(rssi);
+        }
+
+        if (msg_type == (uint8_t)MessageType::BoundaryAlert
+            && x.size() == 1 + sizeof(BoundaryAlert)) {
+          BoundaryAlert a;
+          memcpy(&a, x.data() + 1, sizeof(a));
+          // true = dog outside boundary (alert condition)
+          id(boundary_alert).publish_state(!a.enteredBoundary);
+        }
+
+sensor:
+  - platform: template
+    id: dog_latitude
+    name: "Dog Latitude"
+    unit_of_measurement: "°"
+    accuracy_decimals: 6
+    update_interval: never
+
+  - platform: template
+    id: dog_longitude
+    name: "Dog Longitude"
+    unit_of_measurement: "°"
+    accuracy_decimals: 6
+    update_interval: never
+
+  - platform: template
+    id: dog_satellites
+    name: "Dog GPS Satellites"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: dog_battery_mv
+    name: "Collar Battery"
+    unit_of_measurement: "mV"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: lora_rssi
+    name: "LoRa RSSI"
+    unit_of_measurement: "dBm"
+    accuracy_decimals: 0
+    update_interval: never
+
+binary_sensor:
+  - platform: template
+    id: dog_inside_boundary
+    name: "Dog Inside Boundary"
+
+  - platform: template
+    id: boundary_alert
+    name: "Boundary Alert"

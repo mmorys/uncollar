@@ -10,5 +10,5 @@ static constexpr int kSpiMosi = 13;
 
 // RFM95W radio
 static constexpr int kRadioCs   = 26;  // NSS — A0 (GPIO26)
-static constexpr int kRadioDio0 = -1;  // TBD
-static constexpr int kRadioRst  = -1;  // unconnected; maps to RADIOLIB_NC
+static constexpr int kRadioDio0 = 27;  // DIO0 — A2 (GPIO27)
+static constexpr int kRadioRst  = 25;  // RST — A1 (GPIO25); wire radio RST here
