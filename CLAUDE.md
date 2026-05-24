@@ -9,12 +9,14 @@ Uncollar is a monorepo for an open-source GPS dog collar system. Three component
 | Directory | Language | Status |
 |---|---|---|
 | `collar/` | C++ / Arduino / PlatformIO | Active |
-| `basestation/` | C++ / Arduino / PlatformIO | Planned |
+| `basestation/` | ESPHome YAML + C++ lambda | Active |
 | `homeassistant/` | Python | Planned |
 
-The collar tracks GPS position, checks it against a configurable geofence polygon, and communicates over LoRa to the base station, which integrates with Home Assistant via MQTT.
+The collar tracks GPS position, checks it against a configurable geofence polygon, and communicates over LoRa to the base station. The base station runs ESPHome and exposes position data to Home Assistant via the ESPHome native API.
 
 ## Commands
+
+### Collar (PlatformIO)
 
 All PlatformIO commands are run from the `collar/` directory (or with `--project-dir collar/` from the repo root).
 
@@ -33,7 +35,23 @@ pio test -e native --project-dir collar/
 
 # Clean build artifacts
 pio run --project-dir collar/ --target clean
+
+# Reassign ACM ports after replug (identifies boards by USB VID)
+./assign_ports.sh
 ```
+
+### Basestation (ESPHome)
+
+The basestation is managed via an ESPHome container (web dashboard), not the CLI. Config files live in `basestation/esphome/`. The compiled YAML and `uncollar_protocol.h` must both be present in the ESPHome container's config directory.
+
+```bash
+# CLI alternative (if ESPHome is installed locally)
+esphome compile basestation/esphome/basestation.yaml
+esphome upload  basestation/esphome/basestation.yaml
+esphome logs    basestation/esphome/basestation.yaml
+```
+
+`basestation/esphome/secrets.yaml` is gitignored. Copy `secrets.yaml.example` and fill in WiFi credentials, OTA password, API encryption key, and LoRa sync word before flashing.
 
 ## Collar Firmware Architecture
 
@@ -50,13 +68,30 @@ pio run --project-dir collar/ --target clean
 - `collar/lib/config_manager/` — `IConfigManager` interface + `ConfigManager` implementation. Wraps ESP32 `Preferences` (NVS) for persistent storage of the default GPS position and geofence boundary vertices. Loads defaults on first boot; LoRa config updates call setters then `save()`.
 - `collar/lib/gps_manager/` — `IGpsManager` interface + `AdafruitGpsManager` implementation (Arduino-only, `#ifdef ARDUINO`). Also exports `ddmmToDecimal()` — a platform-independent NMEA conversion utility used by native unit tests.
 - `collar/lib/power_manager/` — `IPowerManager` interface + `Esp32PowerManager` implementation. Encapsulates WiFi/BT shutdown and `esp_deep_sleep_start()`.
-- `collar/lib/radio/` — `IRadio` interface + binary wire message types (`PositionReport`, `BoundaryAlert`, `ConfigUpdate`) + `RFM95Radio` stub. Message structs are pure C++ (no Arduino dependency) so they can be shared with base-station code.
+- `collar/lib/radio/` — `IRadio` interface + binary wire message types (`PositionReport`, `BoundaryAlert`, `ConfigUpdate`) + `RFM95Radio` implementation. Message structs are pure C++ (no Arduino dependency). The LoRa sync word is injected via the `LORA_SYNC_WORD` build flag from the gitignored `collar/credentials.ini`; falls back to `RADIOLIB_SX127X_SYNC_WORD` (0x12) if absent.
 
 **Debug output**: Controlled by compile-time defines in `collar/src/main.cpp`:
 - `#define DEBUG_SERIAL` — enables Serial output (enabled by default)
 - `#define DEBUG_LCD` — enables I2C LCD output (disabled by default)
 
 **I2C bus**: GPS and LCD share `Wire1` on pins 41 (SDA) and 40 (SCL). GPS address `0x10`, LCD address `0x27`.
+
+## Basestation Architecture
+
+**Stack**: ESPHome on an Adafruit QT Py ESP32 Pico (classic ESP32). No custom firmware — all WiFi, OTA, and Home Assistant integration is handled by ESPHome.
+
+**Key files**:
+- `basestation/esphome/basestation.yaml` — full ESPHome config (committed)
+- `basestation/esphome/uncollar_protocol.h` — standalone copy of wire structs for the `on_packet` lambda; must be kept in sync with `collar/lib/radio/radio.h`
+- `basestation/esphome/secrets.yaml` — gitignored credentials (WiFi, OTA, API key, LoRa sync word)
+- `basestation/include/pins.h` — SPI and radio pin assignments for the QT Py ESP32 Pico
+- `basestation/demos/spi_raw_demo.cpp` — PlatformIO diagnostic sketch (raw SPI, no RadioLib)
+
+**Radio**: ESPHome `sx127x` component drives the RFM95W (SX1276). LoRa parameters must match the collar exactly — see `basestation/esphome/basestation.yaml` for the full set (915 MHz, SF9, 125 kHz BW, CR 4/7, 8-symbol preamble, sync word from secret).
+
+**Hardware**: SPI on HSPI bus (GPIO 12/13/14), CS on GPIO26 (A0), RST on GPIO25 (A1), DIO0 on GPIO27 (A2). See `basestation/WIRING.md` for the full diagram.
+
+**Credentials**: LoRa sync word lives in two gitignored files — `basestation/esphome/secrets.yaml` (`lora_sync_word`) and `collar/credentials.ini` (`-DLORA_SYNC_WORD=`). Both must use the same value.
 
 ## Naming Conventions
 
