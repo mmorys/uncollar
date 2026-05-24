@@ -49,6 +49,10 @@
 # PlatformIO
 .pio/
 
+# Local credentials — never commit real values
+basestation/esphome/secrets.yaml
+collar/credentials.ini
+
 # Dependencies downloaded by PlatformIO
 .piolibdeps/
 

@@ -72,12 +72,17 @@ bool RFM95Radio::begin() {
                         RADIOLIB_NC, *_spi);
     _radio = new SX1276(_mod);
 
+    // LORA_SYNC_WORD is injected via collar/credentials.ini (gitignored).
+    // Falls back to the RadioLib default (0x12) if the build flag is absent.
+#ifndef LORA_SYNC_WORD
+#define LORA_SYNC_WORD RADIOLIB_SX127X_SYNC_WORD
+#endif
     int16_t state = _radio->begin(
         _config.frequency,
         125.0f,            // bandwidth kHz
         9,                 // spreading factor
         7,                 // coding rate denominator (4/7)
-        RADIOLIB_SX127X_SYNC_WORD,
+        LORA_SYNC_WORD,
         _config.txPower,
         8                  // preamble length symbols
     );
