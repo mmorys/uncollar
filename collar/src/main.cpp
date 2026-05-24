@@ -20,7 +20,8 @@
 
 constexpr uint32_t GPS_UPDATE_INTERVAL_US  = 5UL * 1000000UL;  // deep sleep duration
 constexpr uint32_t GPS_FIX_TIMEOUT_MS      = 3000;
-constexpr uint32_t CONFIG_RECEIVE_TIMEOUT_MS = 500;
+// Must exceed on-air time of a max-size ConfigUpdate (16 vertices ≈ 970 ms at SF9/125 kHz/CR4-7).
+constexpr uint32_t CONFIG_RECEIVE_TIMEOUT_MS = 2000;
 
 // ============================================
 // GLOBALS
@@ -73,7 +74,11 @@ void setup() {
 #endif
 
     AdafruitGpsManager gps(Wire1);
-    gps.begin();
+    if (!gps.begin()) {
+#ifdef DEBUG_SERIAL
+        Serial.println("GPS init failed — chip did not ACK on I2C");
+#endif
+    }
     gps.wake();
     delay(100);
 
@@ -132,6 +137,11 @@ void setup() {
             configManager.setBoundaryVertices(update.boundaryVertices,
                                               update.vertexCount);
             configManager.save();
+#ifdef DEBUG_SERIAL
+            Serial.print("Config update received: ");
+            Serial.print(update.vertexCount);
+            Serial.println(" boundary vertices saved to NVS");
+#endif
         }
     }
 

@@ -27,12 +27,57 @@ captive_portal:
 api:
   encryption:
     key: !secret api_encryption_key
+  services:
+    - service: send_boundary_update
+      variables:
+        default_lat: float
+        default_lon: float
+        boundary_lats: float[]
+        boundary_lons: float[]
+      then:
+        - lambda: |-
+            if (boundary_lats.size() != boundary_lons.size()
+                || boundary_lats.size() < 3
+                || boundary_lats.size() > 16) {
+              ESP_LOGE("uncollar", "Invalid boundary: need 3-16 matched lat/lon pairs, got %d/%d",
+                       (int)boundary_lats.size(), (int)boundary_lons.size());
+              return;
+            }
+            // Variable-length wire format:
+            //   [0x10][defaultLat:4][defaultLon:4][vertexCount:1][vertex0.lat:4][vertex0.lon:4]...
+            uint8_t vcnt = (uint8_t)boundary_lats.size();
+            size_t pkt_size = 1 + 4 + 4 + 1 + vcnt * sizeof(GeoPoint);
+            std::vector<uint8_t> buf(pkt_size);
+            buf[0] = (uint8_t)MessageType::ConfigUpdate;
+            size_t off = 1;
+            memcpy(buf.data() + off, &default_lat, 4); off += 4;
+            memcpy(buf.data() + off, &default_lon, 4); off += 4;
+            buf[off++] = vcnt;
+            for (int i = 0; i < (int)vcnt; i++) {
+              float lat = boundary_lats[i];
+              float lon = boundary_lons[i];
+              memcpy(buf.data() + off, &lat, 4); off += 4;
+              memcpy(buf.data() + off, &lon, 4); off += 4;
+            }
+            id(pending_config_packet) = buf;
+            id(pending_config)        = true;
+            id(config_update_status).publish_state("Queued");
+            ESP_LOGI("uncollar", "Boundary queued: %d vertices (%d bytes), home=(%.6f, %.6f)",
+                     (int)vcnt, (int)pkt_size, default_lat, default_lon);
 
 ota:
   - platform: esphome
     password: !secret basestation_ota_password
 
 logger:
+
+globals:
+  - id: pending_config
+    type: bool
+    initial_value: 'false'
+  - id: pending_config_packet
+    type: std::vector<uint8_t>
+    restore_value: false
 
 spi:
   clk_pin: GPIO14
@@ -41,6 +86,7 @@ spi:
   interface: spi2
 
 sx127x:
+  id: lora_radio
   cs_pin: GPIO26
   rst_pin: GPIO25
   dio0_pin: GPIO27
@@ -68,13 +114,19 @@ sx127x:
           id(dog_battery_mv).publish_state(r.batteryMv);
           id(dog_inside_boundary).publish_state(r.insideBoundary);
           id(lora_rssi).publish_state(rssi);
+
+          if (id(pending_config)) {
+            id(lora_radio).transmit_packet(id(pending_config_packet));
+            id(pending_config) = false;
+            id(config_update_status).publish_state("Sent");
+            ESP_LOGI("uncollar", "ConfigUpdate sent to collar");
+          }
         }
 
         if (msg_type == (uint8_t)MessageType::BoundaryAlert
             && x.size() == 1 + sizeof(BoundaryAlert)) {
           BoundaryAlert a;
           memcpy(&a, x.data() + 1, sizeof(a));
-          // true = dog outside boundary (alert condition)
           id(boundary_alert).publish_state(!a.enteredBoundary);
         }
 
@@ -121,3 +173,9 @@ binary_sensor:
   - platform: template
     id: boundary_alert
     name: "Boundary Alert"
+
+text_sensor:
+  - platform: template
+    id: config_update_status
+    name: "Config Update Status"
+    update_interval: never

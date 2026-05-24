@@ -29,12 +29,20 @@ AdafruitGpsManager::AdafruitGpsManager(TwoWire& wire)
     : _gps(&wire), _lastFix{{0.0f, 0.0f}, 0, 0.0f, 0, false} {}
 
 bool AdafruitGpsManager::begin() {
-    if (!_gps.begin(0x10)) {
-        return false;
+    // The PA1010D needs a brief moment to be ready on I2C after power-on.
+    // Adafruit_GPS::begin() returns false if the chip doesn't ACK its address;
+    // retry until it does (up to ~2 s total) before giving up.
+    constexpr int      kMaxRetries    = 20;
+    constexpr uint32_t kRetryDelayMs  = 100;
+    for (int i = 0; i < kMaxRetries; i++) {
+        if (_gps.begin(0x10)) {
+            _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+            _gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+            return true;
+        }
+        delay(kRetryDelayMs);
     }
-    _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-    _gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
-    return true;
+    return false;
 }
 
 bool AdafruitGpsManager::waitForFix(uint32_t timeoutMs) {

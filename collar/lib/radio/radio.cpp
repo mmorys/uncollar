@@ -107,8 +107,12 @@ bool RFM95Radio::sendBoundaryAlert(const BoundaryAlert& alert) {
 }
 
 bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
-    constexpr size_t kExpectedLen = 1 + sizeof(ConfigUpdate);
-    uint8_t buf[kExpectedLen];
+    // Variable-length wire format:
+    //   [0x10][defaultLat:f32][defaultLon:f32][vertexCount:u8][vertex0.lat:f32][vertex0.lon:f32]...
+    //   Size: 10 + vertexCount * 8 bytes  (max 138 for 16 vertices)
+    constexpr size_t kHeaderLen = 1 + 4 + 4 + 1;  // type + lat + lon + count
+    constexpr size_t kMaxLen    = kHeaderLen + RADIO_MAX_BOUNDARY_VERTICES * sizeof(GeoPoint);
+    uint8_t buf[kMaxLen];
 
     _radio->startReceive();
     uint32_t deadline = millis() + timeoutMs;
@@ -116,16 +120,22 @@ bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
     while (millis() < deadline) {
         if (_radio->available()) {
             size_t rxLen   = _radio->getPacketLength();
-            bool   correct = (rxLen == kExpectedLen);
-            size_t readLen = correct ? kExpectedLen
-                                     : (rxLen < kExpectedLen ? rxLen : kExpectedLen);
+            size_t readLen = rxLen < kMaxLen ? rxLen : kMaxLen;
             int16_t state  = _radio->readData(buf, readLen);
             _radio->startReceive();  // re-arm for next packet
 
-            if (!correct || state != RADIOLIB_ERR_NONE) continue;
+            if (state != RADIOLIB_ERR_NONE || rxLen < kHeaderLen) continue;
             if (buf[0] != static_cast<uint8_t>(MessageType::ConfigUpdate)) continue;
 
-            memcpy(&out, buf + 1, sizeof(ConfigUpdate));
+            size_t offset = 1;
+            memcpy(&out.defaultLatitude,  buf + offset, 4); offset += 4;
+            memcpy(&out.defaultLongitude, buf + offset, 4); offset += 4;
+            out.vertexCount = buf[offset++];
+
+            if (out.vertexCount > RADIO_MAX_BOUNDARY_VERTICES) continue;
+            if (rxLen != kHeaderLen + out.vertexCount * sizeof(GeoPoint)) continue;
+
+            memcpy(out.boundaryVertices, buf + offset, out.vertexCount * sizeof(GeoPoint));
             _lastRssi = static_cast<int>(_radio->getRSSI());
             return true;
         }
