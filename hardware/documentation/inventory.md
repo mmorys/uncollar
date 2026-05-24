@@ -7,6 +7,7 @@
 - Quantity: 1
 
 [Vendor Page](https://www.adafruit.com/product/5426)
+[Adafrui guide](https://learn.adafruit.com/adafruit-qt-py-esp32-s3)
 
 **Adafruit ItsyBitsy M4 Express ATSAMD51**
 
