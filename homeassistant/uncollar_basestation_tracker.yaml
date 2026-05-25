@@ -1,0 +1,41 @@
+# Uncollar — mirror the basestation's GPS coordinates into a Home Assistant device_tracker.
+#
+# ESPHome's native API can publish sensors (latitude, longitude) but cannot
+# directly create a device_tracker entity. This automation bridges the two by
+# calling device_tracker.see whenever a new GPS reading arrives from the
+# basestation's onboard GPS module.
+#
+# Resulting entity: device_tracker.uncollar_basestation
+#
+# This file is a source-of-truth copy kept in the repo. To install in Home
+# Assistant, copy the automation block below (from `- alias:` onward) into
+# your existing automations.yaml — the default HA setup already wires this
+# file in via `automation: !include automations.yaml` in configuration.yaml.
+# Alternatively, paste into Settings → Automations → "Edit in YAML".
+#
+# The sensor entity IDs assume the ESPHome device name is `uncollar-basestation`
+# (the default in basestation/esphome/basestation.yaml). Adjust if you renamed it.
+
+- alias: "Uncollar: Update Basestation Tracker"
+  id: uncollar_update_basestation_tracker
+  description: Refresh device_tracker.uncollar_basestation whenever the basestation GPS reports a new fix.
+  triggers:
+    - trigger: state
+      entity_id:
+        - sensor.uncollar_basestation_basestation_latitude
+        - sensor.uncollar_basestation_basestation_longitude
+  conditions:
+    - condition: template
+      value_template: >
+        {{ states('sensor.uncollar_basestation_basestation_latitude') not in ['unknown', 'unavailable']
+           and states('sensor.uncollar_basestation_basestation_longitude') not in ['unknown', 'unavailable'] }}
+  actions:
+    - action: device_tracker.see
+      data:
+        dev_id: uncollar_basestation
+        host_name: Uncollar Basestation
+        gps:
+          - "{{ states('sensor.uncollar_basestation_basestation_latitude') | float }}"
+          - "{{ states('sensor.uncollar_basestation_basestation_longitude') | float }}"
+  mode: queued
+  max: 10
