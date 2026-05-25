@@ -175,6 +175,23 @@ sensor:
     accuracy_decimals: 0
     update_interval: never
 
+switch:
+  - platform: template
+    id: warn_enabled
+    name: "Collar Boundary Warnings"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: |-
+          id(pending_config_packet) = {(uint8_t)MessageType::WarnEnable, 0x01};
+          id(pending_config) = true;
+          id(config_update_status).publish_state("Queued");
+    turn_off_action:
+      - lambda: |-
+          id(pending_config_packet) = {(uint8_t)MessageType::WarnEnable, 0x00};
+          id(pending_config) = true;
+          id(config_update_status).publish_state("Queued");
+
 binary_sensor:
   - platform: template
     id: dog_inside_boundary
