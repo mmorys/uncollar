@@ -108,9 +108,10 @@ bool RFM95Radio::sendBoundaryAlert(const BoundaryAlert& alert) {
 
 bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
     // Variable-length wire format:
-    //   [0x10][defaultLat:f32][defaultLon:f32][vertexCount:u8][vertex0.lat:f32][vertex0.lon:f32]...
-    //   Size: 10 + vertexCount * 8 bytes  (max 138 for 16 vertices)
-    constexpr size_t kHeaderLen = 1 + 4 + 4 + 1;  // type + lat + lon + count
+    //   [0x10][defaultLat:f32][defaultLon:f32][warnAfter:u16][repeatWarn:u16]
+    //   [warnAction:u8][vertexCount:u8][vertex0.lat:f32][vertex0.lon:f32]...
+    //   Size: 15 + vertexCount * 8 bytes  (max 143 for 16 vertices)
+    constexpr size_t kHeaderLen = 1 + 4 + 4 + 2 + 2 + 1 + 1;
     constexpr size_t kMaxLen    = kHeaderLen + RADIO_MAX_BOUNDARY_VERTICES * sizeof(GeoPoint);
     uint8_t buf[kMaxLen];
 
@@ -128,8 +129,14 @@ bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
             if (buf[0] != static_cast<uint8_t>(MessageType::ConfigUpdate)) continue;
 
             size_t offset = 1;
-            memcpy(&out.defaultLatitude,  buf + offset, 4); offset += 4;
-            memcpy(&out.defaultLongitude, buf + offset, 4); offset += 4;
+            memcpy(&out.defaultLatitude,   buf + offset, 4); offset += 4;
+            memcpy(&out.defaultLongitude,  buf + offset, 4); offset += 4;
+            memcpy(&out.warnAfterSeconds,  buf + offset, 2); offset += 2;
+            memcpy(&out.repeatWarnSeconds, buf + offset, 2); offset += 2;
+            uint8_t actionByte = buf[offset++];
+            out.warnAction = (actionByte == static_cast<uint8_t>(WarnAction::Vibrate))
+                                 ? WarnAction::Vibrate
+                                 : WarnAction::Beep;
             out.vertexCount = buf[offset++];
 
             if (out.vertexCount > RADIO_MAX_BOUNDARY_VERTICES) continue;

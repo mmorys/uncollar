@@ -62,15 +62,33 @@ struct BoundaryAlert {
 };
 
 /**
- * @brief Base Station → Collar: updated geofence and home position.
+ * @brief Which actuator fires when the collar warns about a boundary breach.
+ *
+ * Wire value is a single byte; unknown values are clamped to Beep on the collar.
+ */
+enum class WarnAction : uint8_t {
+    Beep    = 0,
+    Vibrate = 1,
+};
+
+/**
+ * @brief Base Station → Collar: updated geofence, home position, and warn settings.
  *
  * The collar persists this to NVS upon receipt.
+ *
+ * `warnAfterSeconds` is the duration the collar must be continuously outside the
+ * boundary before the first warning fires. `repeatWarnSeconds` is the interval
+ * between subsequent warnings while still outside. Both are quantized to the
+ * collar's GPS wake interval.
  */
 struct ConfigUpdate {
-    float    defaultLatitude;
-    float    defaultLongitude;
-    GeoPoint boundaryVertices[RADIO_MAX_BOUNDARY_VERTICES];
-    uint8_t  vertexCount;
+    float      defaultLatitude;
+    float      defaultLongitude;
+    GeoPoint   boundaryVertices[RADIO_MAX_BOUNDARY_VERTICES];
+    uint8_t    vertexCount;
+    uint16_t   warnAfterSeconds;
+    uint16_t   repeatWarnSeconds;
+    WarnAction warnAction;
 };
 
 // ============================================

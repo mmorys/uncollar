@@ -44,9 +44,39 @@ RTC_DATA_ATTR GpsFix lastFix = {
     false    // valid
 };
 
+// Streak counters for the outside-boundary warn logic. Both survive deep
+// sleep and are reset to zero whenever the collar is found inside the boundary.
+// cyclesOutside counts consecutive wake cycles spent outside; multiplied by
+// the sleep interval it yields the duration outside. cyclesSinceWarn tracks
+// cycles since the most recent warn fired (0 = no warn fired yet in this
+// streak), so the repeat interval can be honored across deep sleeps.
+RTC_DATA_ATTR uint32_t cyclesOutside  = 0;
+RTC_DATA_ATTR uint32_t cyclesSinceWarn = 0;
+
 #ifdef DEBUG_LCD
 I2C_LCD lcd(0x27, &Wire1);
 #endif
+
+// ============================================
+// ACTUATORS
+// ============================================
+
+static void vibrate() {
+    // TODO: drive vibration motor GPIO
+}
+
+static void beep() {
+    // TODO: drive beeper GPIO
+}
+
+// Fires whichever actuator the user has selected via Home Assistant.
+static void warn_outside_boundary() {
+    if (configManager.getWarnAction() == WarnAction::Vibrate) {
+        vibrate();
+    } else {
+        beep();
+    }
+}
 
 // ============================================
 // SENSOR CYCLE — GPS fix + geofence + radio
@@ -78,6 +108,34 @@ static void runCycle() {
     Polygon boundary(configManager.getBoundaryVertices(),
                      configManager.getBoundaryVertexCount());
     bool inside = boundary.contains(pos);
+
+    // ---- Outside-boundary warn streak ----
+    // Duration is quantized to the sleep interval; both counters live in RTC
+    // memory so the streak survives deep sleep.
+    constexpr uint32_t kSleepIntervalSec = GPS_UPDATE_INTERVAL_US / 1000000UL;
+    if (inside) {
+        cyclesOutside   = 0;
+        cyclesSinceWarn = 0;
+    } else {
+        cyclesOutside++;
+        uint32_t secondsOutside = cyclesOutside * kSleepIntervalSec;
+        if (secondsOutside >= configManager.getWarnAfterSeconds()) {
+            uint32_t secondsSinceWarn = cyclesSinceWarn * kSleepIntervalSec;
+            bool firstWarn = (cyclesSinceWarn == 0);
+            if (firstWarn ||
+                secondsSinceWarn >= configManager.getRepeatWarnSeconds()) {
+                warn_outside_boundary();
+                cyclesSinceWarn = 1;
+#ifdef DEBUG_SERIAL
+                Serial.print("Warn fired after ");
+                Serial.print(secondsOutside);
+                Serial.println(" s outside");
+#endif
+            } else {
+                cyclesSinceWarn++;
+            }
+        }
+    }
 
 #ifdef DEBUG_SERIAL
     if (fix.valid) {
@@ -116,11 +174,19 @@ static void runCycle() {
                                              update.defaultLongitude);
             configManager.setBoundaryVertices(update.boundaryVertices,
                                               update.vertexCount);
+            configManager.setWarnAfterSeconds(update.warnAfterSeconds);
+            configManager.setRepeatWarnSeconds(update.repeatWarnSeconds);
+            configManager.setWarnAction(update.warnAction);
             configManager.save();
 #ifdef DEBUG_SERIAL
             Serial.print("Config update received: ");
             Serial.print(update.vertexCount);
-            Serial.println(" boundary vertices saved to NVS");
+            Serial.print(" vertices, warnAfter=");
+            Serial.print(update.warnAfterSeconds);
+            Serial.print("s, repeat=");
+            Serial.print(update.repeatWarnSeconds);
+            Serial.print("s, action=");
+            Serial.println(update.warnAction == WarnAction::Vibrate ? "vibrate" : "beep");
 #endif
         }
     }

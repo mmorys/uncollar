@@ -34,6 +34,9 @@ api:
         default_lon: float
         boundary_lats: float[]
         boundary_lons: float[]
+        warn_after_seconds: int
+        repeat_warn_seconds: int
+        warn_action: int        # 0 = beep, 1 = vibrate
       then:
         - lambda: |-
             if (boundary_lats.size() != boundary_lons.size()
@@ -44,14 +47,20 @@ api:
               return;
             }
             // Variable-length wire format:
-            //   [0x10][defaultLat:4][defaultLon:4][vertexCount:1][vertex0.lat:4][vertex0.lon:4]...
+            //   [0x10][defaultLat:4][defaultLon:4][warnAfter:2][repeatWarn:2]
+            //   [warnAction:1][vertexCount:1][vertex0.lat:4][vertex0.lon:4]...
             uint8_t vcnt = (uint8_t)boundary_lats.size();
-            size_t pkt_size = 1 + 4 + 4 + 1 + vcnt * sizeof(GeoPoint);
+            size_t pkt_size = 1 + 4 + 4 + 2 + 2 + 1 + 1 + vcnt * sizeof(GeoPoint);
             std::vector<uint8_t> buf(pkt_size);
             buf[0] = (uint8_t)MessageType::ConfigUpdate;
             size_t off = 1;
             memcpy(buf.data() + off, &default_lat, 4); off += 4;
             memcpy(buf.data() + off, &default_lon, 4); off += 4;
+            uint16_t warn_after  = (uint16_t)warn_after_seconds;
+            uint16_t warn_repeat = (uint16_t)repeat_warn_seconds;
+            memcpy(buf.data() + off, &warn_after,  2); off += 2;
+            memcpy(buf.data() + off, &warn_repeat, 2); off += 2;
+            buf[off++] = (uint8_t)(warn_action == 1 ? 1 : 0);
             buf[off++] = vcnt;
             for (int i = 0; i < (int)vcnt; i++) {
               float lat = boundary_lats[i];
@@ -62,8 +71,9 @@ api:
             id(pending_config_packet) = buf;
             id(pending_config)        = true;
             id(config_update_status).publish_state("Queued");
-            ESP_LOGI("uncollar", "Boundary queued: %d vertices (%d bytes), home=(%.6f, %.6f)",
-                     (int)vcnt, (int)pkt_size, default_lat, default_lon);
+            ESP_LOGI("uncollar", "Config queued: %d vertices (%d bytes), home=(%.6f, %.6f), warn after %ds repeat %ds action=%d",
+                     (int)vcnt, (int)pkt_size, default_lat, default_lon,
+                     (int)warn_after, (int)warn_repeat, (int)(warn_action == 1 ? 1 : 0));
 
 ota:
   - platform: esphome

@@ -27,9 +27,17 @@ struct BoundaryAlert {
 
 struct GeoPoint { float lat, lon; };
 
+enum class WarnAction : uint8_t {
+    Beep    = 0,
+    Vibrate = 1,
+};
+
 struct ConfigUpdate {
-    float    defaultLatitude;
-    float    defaultLongitude;
-    GeoPoint boundaryVertices[16];
-    uint8_t  vertexCount;
+    float      defaultLatitude;
+    float      defaultLongitude;
+    GeoPoint   boundaryVertices[16];
+    uint8_t    vertexCount;
+    uint16_t   warnAfterSeconds;
+    uint16_t   repeatWarnSeconds;
+    WarnAction warnAction;
 };

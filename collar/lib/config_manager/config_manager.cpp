@@ -16,6 +16,9 @@ ConfigManager::ConfigManager()
     _config.defaultLongitude = 0.0f;
     _config.boundaryVertices = nullptr;
     _config.boundaryVertexCount = 0;
+    _config.warnAfterSeconds  = DEFAULT_WARN_AFTER_SECONDS;
+    _config.repeatWarnSeconds = DEFAULT_REPEAT_WARN_SECONDS;
+    _config.warnAction        = DEFAULT_WARN_ACTION;
 }
 
 ConfigManager::~ConfigManager() {
@@ -71,6 +74,10 @@ void ConfigManager::loadDefaults() {
     for (size_t i = 0; i < DEFAULT_BOUNDARY_VERTEX_COUNT; i++) {
         _config.boundaryVertices[i] = DEFAULT_BOUNDARY_VERTICES[i];
     }
+
+    _config.warnAfterSeconds  = DEFAULT_WARN_AFTER_SECONDS;
+    _config.repeatWarnSeconds = DEFAULT_REPEAT_WARN_SECONDS;
+    _config.warnAction        = DEFAULT_WARN_ACTION;
 }
 
 bool ConfigManager::load() {
@@ -112,10 +119,18 @@ bool ConfigManager::load() {
     for (size_t i = 0; i < _config.boundaryVertexCount; i++) {
         snprintf(keyBuffer, sizeof(keyBuffer), "%s%u_lat", KEY_BOUNDARY_PREFIX, i);
         _config.boundaryVertices[i].lat = _prefs.getFloat(keyBuffer, 0.0f);
-        
+
         snprintf(keyBuffer, sizeof(keyBuffer), "%s%u_lon", KEY_BOUNDARY_PREFIX, i);
         _config.boundaryVertices[i].lon = _prefs.getFloat(keyBuffer, 0.0f);
     }
+
+    _config.warnAfterSeconds  = _prefs.getUShort(KEY_WARN_AFTER,  DEFAULT_WARN_AFTER_SECONDS);
+    _config.repeatWarnSeconds = _prefs.getUShort(KEY_WARN_REPEAT, DEFAULT_REPEAT_WARN_SECONDS);
+    uint8_t actionByte        = _prefs.getUChar(KEY_WARN_ACTION,
+                                                static_cast<uint8_t>(DEFAULT_WARN_ACTION));
+    _config.warnAction = (actionByte == static_cast<uint8_t>(WarnAction::Vibrate))
+                             ? WarnAction::Vibrate
+                             : WarnAction::Beep;
 
     #ifdef DEBUG_SERIAL
     Serial.println("Configuration loaded from NVS");
@@ -141,10 +156,14 @@ bool ConfigManager::save() {
     for (size_t i = 0; i < _config.boundaryVertexCount; i++) {
         snprintf(keyBuffer, sizeof(keyBuffer), "%s%u_lat", KEY_BOUNDARY_PREFIX, i);
         _prefs.putFloat(keyBuffer, _config.boundaryVertices[i].lat);
-        
+
         snprintf(keyBuffer, sizeof(keyBuffer), "%s%u_lon", KEY_BOUNDARY_PREFIX, i);
         _prefs.putFloat(keyBuffer, _config.boundaryVertices[i].lon);
     }
+
+    _prefs.putUShort(KEY_WARN_AFTER,  _config.warnAfterSeconds);
+    _prefs.putUShort(KEY_WARN_REPEAT, _config.repeatWarnSeconds);
+    _prefs.putUChar(KEY_WARN_ACTION,  static_cast<uint8_t>(_config.warnAction));
 
     #ifdef DEBUG_SERIAL
     Serial.println("Configuration saved to NVS");
@@ -201,6 +220,30 @@ void ConfigManager::setDefaultLatitude(float lat) {
 
 void ConfigManager::setDefaultLongitude(float lon) {
     _config.defaultLongitude = lon;
+}
+
+uint16_t ConfigManager::getWarnAfterSeconds() const {
+    return _config.warnAfterSeconds;
+}
+
+uint16_t ConfigManager::getRepeatWarnSeconds() const {
+    return _config.repeatWarnSeconds;
+}
+
+WarnAction ConfigManager::getWarnAction() const {
+    return _config.warnAction;
+}
+
+void ConfigManager::setWarnAfterSeconds(uint16_t seconds) {
+    _config.warnAfterSeconds = seconds;
+}
+
+void ConfigManager::setRepeatWarnSeconds(uint16_t seconds) {
+    _config.repeatWarnSeconds = seconds;
+}
+
+void ConfigManager::setWarnAction(WarnAction action) {
+    _config.warnAction = action;
 }
 
 bool ConfigManager::setBoundaryVertices(const GeoPoint* vertices, size_t count) {
