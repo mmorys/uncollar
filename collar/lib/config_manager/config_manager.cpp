@@ -19,6 +19,7 @@ ConfigManager::ConfigManager()
     _config.warnAfterSeconds  = DEFAULT_WARN_AFTER_SECONDS;
     _config.repeatWarnSeconds = DEFAULT_REPEAT_WARN_SECONDS;
     _config.warnAction        = DEFAULT_WARN_ACTION;
+    _config.warningsEnabled   = DEFAULT_WARNINGS_ENABLED;
 }
 
 ConfigManager::~ConfigManager() {
@@ -78,6 +79,7 @@ void ConfigManager::loadDefaults() {
     _config.warnAfterSeconds  = DEFAULT_WARN_AFTER_SECONDS;
     _config.repeatWarnSeconds = DEFAULT_REPEAT_WARN_SECONDS;
     _config.warnAction        = DEFAULT_WARN_ACTION;
+    _config.warningsEnabled   = DEFAULT_WARNINGS_ENABLED;
 }
 
 bool ConfigManager::load() {
@@ -131,6 +133,7 @@ bool ConfigManager::load() {
     _config.warnAction = (actionByte == static_cast<uint8_t>(WarnAction::Vibrate))
                              ? WarnAction::Vibrate
                              : WarnAction::Beep;
+    _config.warningsEnabled = _prefs.getBool(KEY_WARN_ENABLED, DEFAULT_WARNINGS_ENABLED);
 
     #ifdef DEBUG_SERIAL
     Serial.println("Configuration loaded from NVS");
@@ -164,6 +167,7 @@ bool ConfigManager::save() {
     _prefs.putUShort(KEY_WARN_AFTER,  _config.warnAfterSeconds);
     _prefs.putUShort(KEY_WARN_REPEAT, _config.repeatWarnSeconds);
     _prefs.putUChar(KEY_WARN_ACTION,  static_cast<uint8_t>(_config.warnAction));
+    _prefs.putBool(KEY_WARN_ENABLED,  _config.warningsEnabled);
 
     #ifdef DEBUG_SERIAL
     Serial.println("Configuration saved to NVS");
@@ -244,6 +248,14 @@ void ConfigManager::setRepeatWarnSeconds(uint16_t seconds) {
 
 void ConfigManager::setWarnAction(WarnAction action) {
     _config.warnAction = action;
+}
+
+bool ConfigManager::getWarningsEnabled() const {
+    return _config.warningsEnabled;
+}
+
+void ConfigManager::setWarningsEnabled(bool enabled) {
+    _config.warningsEnabled = enabled;
 }
 
 bool ConfigManager::setBoundaryVertices(const GeoPoint* vertices, size_t count) {

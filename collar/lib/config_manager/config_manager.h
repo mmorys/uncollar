@@ -47,6 +47,7 @@ constexpr size_t DEFAULT_BOUNDARY_VERTEX_COUNT =
 constexpr uint16_t   DEFAULT_WARN_AFTER_SECONDS  = 30;
 constexpr uint16_t   DEFAULT_REPEAT_WARN_SECONDS = 30;
 constexpr WarnAction DEFAULT_WARN_ACTION         = WarnAction::Beep;
+constexpr bool       DEFAULT_WARNINGS_ENABLED    = true;
 
 // NVS namespace and keys
 constexpr char NVS_NAMESPACE[] = "uncollar_cfg";
@@ -54,9 +55,10 @@ constexpr char KEY_LATITUDE[] = "cfg_lat";
 constexpr char KEY_LONGITUDE[] = "cfg_lon";
 constexpr char KEY_BOUNDARY_COUNT[] = "cfg_bnd_cnt";
 constexpr char KEY_BOUNDARY_PREFIX[] = "cfg_bnd_";
-constexpr char KEY_WARN_AFTER[]  = "cfg_warn_aft";
-constexpr char KEY_WARN_REPEAT[] = "cfg_warn_rep";
-constexpr char KEY_WARN_ACTION[] = "cfg_warn_act";
+constexpr char KEY_WARN_AFTER[]   = "cfg_warn_aft";
+constexpr char KEY_WARN_REPEAT[]  = "cfg_warn_rep";
+constexpr char KEY_WARN_ACTION[]  = "cfg_warn_act";
+constexpr char KEY_WARN_ENABLED[] = "cfg_warn_on";
 
 // ============================================
 // CONFIG STRUCT
@@ -76,6 +78,7 @@ struct Config {
     uint16_t   warnAfterSeconds;
     uint16_t   repeatWarnSeconds;
     WarnAction warnAction;
+    bool       warningsEnabled;
 };
 
 // ============================================
@@ -103,12 +106,14 @@ public:
     virtual uint16_t        getWarnAfterSeconds()   const = 0;
     virtual uint16_t        getRepeatWarnSeconds()  const = 0;
     virtual WarnAction      getWarnAction()         const = 0;
+    virtual bool            getWarningsEnabled()    const = 0;
 
     virtual void setDefaultPosition(float lat, float lon) = 0;
     virtual bool setBoundaryVertices(const GeoPoint* vertices, size_t count) = 0;
     virtual void setWarnAfterSeconds(uint16_t seconds) = 0;
     virtual void setRepeatWarnSeconds(uint16_t seconds) = 0;
     virtual void setWarnAction(WarnAction action) = 0;
+    virtual void setWarningsEnabled(bool enabled) = 0;
 };
 
 // ============================================
@@ -277,6 +282,16 @@ public:
      * @brief Select which actuator the warn event triggers.
      */
     void setWarnAction(WarnAction action) override;
+
+    /**
+     * @brief Get whether outside-boundary warnings are enabled.
+     */
+    bool getWarningsEnabled() const override;
+
+    /**
+     * @brief Enable or disable outside-boundary warnings.
+     */
+    void setWarningsEnabled(bool enabled) override;
 
     /**
      * @brief Check if configuration has been initialized.
