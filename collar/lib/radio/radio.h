@@ -32,7 +32,17 @@ enum class MessageType : uint8_t {
     PositionReport = 0x01,  ///< Collar → Base: current position
     BoundaryAlert  = 0x02,  ///< Collar → Base: boundary crossing event
     ConfigUpdate   = 0x10,  ///< Base → Collar: new geofence / home position
+    WarnEnable     = 0x11,  ///< Base → Collar: enable or disable boundary warnings
     Ack            = 0x20,  ///< Either direction: acknowledgement
+};
+
+/**
+ * @brief Result of a receiveConfig() call, indicating which packet type arrived.
+ */
+enum class ConfigReceiveResult {
+    None,         ///< Timeout — nothing received
+    ConfigUpdate, ///< Full geofence + warn-settings update
+    WarnEnable,   ///< Single-byte warnings on/off toggle
 };
 
 /**
@@ -121,15 +131,19 @@ public:
     virtual bool sendBoundaryAlert(const BoundaryAlert& alert) = 0;
 
     /**
-     * @brief Listen for a config update from the base station.
+     * @brief Listen for any inbound config packet from the base station.
      *
-     * Blocks up to timeoutMs waiting for a ConfigUpdate packet.
+     * Blocks up to timeoutMs waiting for either a ConfigUpdate or a WarnEnable
+     * packet. Returns as soon as one valid packet is decoded.
      *
-     * @param out       Populated if a valid update arrives
-     * @param timeoutMs Maximum wait time in milliseconds
-     * @return true if a valid ConfigUpdate was received
+     * @param configOut    Populated when result is ConfigReceiveResult::ConfigUpdate
+     * @param warnEnabled  Populated when result is ConfigReceiveResult::WarnEnable
+     * @param timeoutMs    Maximum wait time in milliseconds
+     * @return Which packet type was received, or ConfigReceiveResult::None on timeout
      */
-    virtual bool receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) = 0;
+    virtual ConfigReceiveResult receiveConfig(ConfigUpdate& configOut,
+                                              bool& warnEnabled,
+                                              uint32_t timeoutMs) = 0;
 
     /**
      * @brief RSSI of the last received packet in dBm.
@@ -172,11 +186,13 @@ public:
     explicit RFM95Radio(const RFM95Config& config);
     ~RFM95Radio() override;
 
-    bool begin() override;
-    bool sendPositionReport(const PositionReport& report) override;
-    bool sendBoundaryAlert(const BoundaryAlert& alert) override;
-    bool receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) override;
-    int  lastRssi() const override;
+    bool                begin() override;
+    bool                sendPositionReport(const PositionReport& report) override;
+    bool                sendBoundaryAlert(const BoundaryAlert& alert) override;
+    ConfigReceiveResult receiveConfig(ConfigUpdate& configOut,
+                                      bool& warnEnabled,
+                                      uint32_t timeoutMs) override;
+    int                 lastRssi() const override;
 
 private:
     RFM95Config _config;

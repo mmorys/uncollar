@@ -106,13 +106,19 @@ bool RFM95Radio::sendBoundaryAlert(const BoundaryAlert& alert) {
     return _radio->transmit(buf, sizeof(buf)) == RADIOLIB_ERR_NONE;
 }
 
-bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
-    // Variable-length wire format:
+ConfigReceiveResult RFM95Radio::receiveConfig(ConfigUpdate& configOut,
+                                               bool& warnEnabled,
+                                               uint32_t timeoutMs) {
+    // ConfigUpdate wire format:
     //   [0x10][defaultLat:f32][defaultLon:f32][warnAfter:u16][repeatWarn:u16]
     //   [warnAction:u8][vertexCount:u8][vertex0.lat:f32][vertex0.lon:f32]...
     //   Size: 15 + vertexCount * 8 bytes  (max 143 for 16 vertices)
-    constexpr size_t kHeaderLen = 1 + 4 + 4 + 2 + 2 + 1 + 1;
-    constexpr size_t kMaxLen    = kHeaderLen + RADIO_MAX_BOUNDARY_VERTICES * sizeof(GeoPoint);
+    constexpr size_t kConfigHeaderLen = 1 + 4 + 4 + 2 + 2 + 1 + 1;
+    constexpr size_t kMaxLen = kConfigHeaderLen + RADIO_MAX_BOUNDARY_VERTICES * sizeof(GeoPoint);
+
+    // WarnEnable wire format: [0x11][enabled:u8]  (2 bytes)
+    constexpr size_t kWarnEnableLen = 2;
+
     uint8_t buf[kMaxLen];
 
     _radio->startReceive();
@@ -125,30 +131,40 @@ bool RFM95Radio::receiveConfigUpdate(ConfigUpdate& out, uint32_t timeoutMs) {
             int16_t state  = _radio->readData(buf, readLen);
             _radio->startReceive();  // re-arm for next packet
 
-            if (state != RADIOLIB_ERR_NONE || rxLen < kHeaderLen) continue;
-            if (buf[0] != static_cast<uint8_t>(MessageType::ConfigUpdate)) continue;
+            if (state != RADIOLIB_ERR_NONE || rxLen < 1) continue;
 
-            size_t offset = 1;
-            memcpy(&out.defaultLatitude,   buf + offset, 4); offset += 4;
-            memcpy(&out.defaultLongitude,  buf + offset, 4); offset += 4;
-            memcpy(&out.warnAfterSeconds,  buf + offset, 2); offset += 2;
-            memcpy(&out.repeatWarnSeconds, buf + offset, 2); offset += 2;
-            uint8_t actionByte = buf[offset++];
-            out.warnAction = (actionByte == static_cast<uint8_t>(WarnAction::Vibrate))
-                                 ? WarnAction::Vibrate
-                                 : WarnAction::Beep;
-            out.vertexCount = buf[offset++];
+            if (buf[0] == static_cast<uint8_t>(MessageType::WarnEnable)) {
+                if (rxLen != kWarnEnableLen) continue;
+                warnEnabled = buf[1] != 0;
+                _lastRssi = static_cast<int>(_radio->getRSSI());
+                return ConfigReceiveResult::WarnEnable;
+            }
 
-            if (out.vertexCount > RADIO_MAX_BOUNDARY_VERTICES) continue;
-            if (rxLen != kHeaderLen + out.vertexCount * sizeof(GeoPoint)) continue;
+            if (buf[0] == static_cast<uint8_t>(MessageType::ConfigUpdate)) {
+                if (rxLen < kConfigHeaderLen) continue;
+                size_t offset = 1;
+                memcpy(&configOut.defaultLatitude,   buf + offset, 4); offset += 4;
+                memcpy(&configOut.defaultLongitude,  buf + offset, 4); offset += 4;
+                memcpy(&configOut.warnAfterSeconds,  buf + offset, 2); offset += 2;
+                memcpy(&configOut.repeatWarnSeconds, buf + offset, 2); offset += 2;
+                uint8_t actionByte = buf[offset++];
+                configOut.warnAction = (actionByte == static_cast<uint8_t>(WarnAction::Vibrate))
+                                           ? WarnAction::Vibrate
+                                           : WarnAction::Beep;
+                configOut.vertexCount = buf[offset++];
 
-            memcpy(out.boundaryVertices, buf + offset, out.vertexCount * sizeof(GeoPoint));
-            _lastRssi = static_cast<int>(_radio->getRSSI());
-            return true;
+                if (configOut.vertexCount > RADIO_MAX_BOUNDARY_VERTICES) continue;
+                if (rxLen != kConfigHeaderLen + configOut.vertexCount * sizeof(GeoPoint)) continue;
+
+                memcpy(configOut.boundaryVertices, buf + offset,
+                       configOut.vertexCount * sizeof(GeoPoint));
+                _lastRssi = static_cast<int>(_radio->getRSSI());
+                return ConfigReceiveResult::ConfigUpdate;
+            }
         }
         delay(5);
     }
-    return false;
+    return ConfigReceiveResult::None;
 }
 
 int RFM95Radio::lastRssi() const {

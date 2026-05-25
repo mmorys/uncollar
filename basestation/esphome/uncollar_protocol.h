@@ -7,6 +7,7 @@ enum class MessageType : uint8_t {
     PositionReport = 0x01,
     BoundaryAlert  = 0x02,
     ConfigUpdate   = 0x10,
+    WarnEnable     = 0x11,
 };
 
 struct PositionReport {
