@@ -124,7 +124,9 @@ static void runCycle() {
             bool firstWarn = (cyclesSinceWarn == 0);
             if (firstWarn ||
                 secondsSinceWarn >= configManager.getRepeatWarnSeconds()) {
-                warn_outside_boundary();
+                if (configManager.getWarningsEnabled()) {
+                    warn_outside_boundary();
+                }
                 cyclesSinceWarn = 1;
 #ifdef DEBUG_SERIAL
                 Serial.print("Warn fired after ");
@@ -169,7 +171,9 @@ static void runCycle() {
         radio.sendPositionReport(report);
 
         ConfigUpdate update;
-        if (radio.receiveConfigUpdate(update, CONFIG_RECEIVE_TIMEOUT_MS)) {
+        bool warnEnabled;
+        auto rxResult = radio.receiveConfig(update, warnEnabled, CONFIG_RECEIVE_TIMEOUT_MS);
+        if (rxResult == ConfigReceiveResult::ConfigUpdate) {
             configManager.setDefaultPosition(update.defaultLatitude,
                                              update.defaultLongitude);
             configManager.setBoundaryVertices(update.boundaryVertices,
@@ -187,6 +191,13 @@ static void runCycle() {
             Serial.print(update.repeatWarnSeconds);
             Serial.print("s, action=");
             Serial.println(update.warnAction == WarnAction::Vibrate ? "vibrate" : "beep");
+#endif
+        } else if (rxResult == ConfigReceiveResult::WarnEnable) {
+            configManager.setWarningsEnabled(warnEnabled);
+            configManager.save();
+#ifdef DEBUG_SERIAL
+            Serial.print("Warnings ");
+            Serial.println(warnEnabled ? "enabled" : "disabled");
 #endif
         }
     }
