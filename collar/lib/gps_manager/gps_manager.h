@@ -27,6 +27,7 @@ struct GpsFix {
     uint32_t timestamp;  ///< millis() at fix acquisition; 0 if invalid
     float    hdop;       ///< Horizontal dilution of precision (lower = better)
     uint8_t  satellites; ///< Number of satellites used
+    uint8_t  fixQuality; ///< 0=invalid, 1=GPS, 2=DGPS/SBAS (GGA only; 0 when DEBUG_GPS_QUALITY is off)
     bool     valid;      ///< true if fix was acquired
 };
 

@@ -26,7 +26,7 @@ float ddmmToDecimal(float ddmm, char hemisphere) {
 #ifdef ARDUINO
 
 AdafruitGpsManager::AdafruitGpsManager(TwoWire& wire)
-    : _gps(&wire), _lastFix{{0.0f, 0.0f}, 0, 0.0f, 0, false} {}
+    : _gps(&wire), _lastFix{{0.0f, 0.0f}, 0, 0.0f, 0, 0, false} {}
 
 bool AdafruitGpsManager::begin() {
     // The PA1010D can take several seconds after a cold power-on before it
@@ -37,7 +37,11 @@ bool AdafruitGpsManager::begin() {
     constexpr uint32_t kRetryDelayMs = 100;
     for (int i = 0; i < kMaxRetries; i++) {
         if (_gps.begin(0x10)) {
+#ifdef DEBUG_GPS_QUALITY
+            _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+#else
             _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+#endif
             _gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
             _gps.sendCommand("$PMTK313,1*2E");  // enable SBAS satellite search
             _gps.sendCommand("$PMTK301,2*2E");  // set DGPS source to SBAS/WAAS
@@ -62,6 +66,9 @@ bool AdafruitGpsManager::waitForFix(uint32_t timeoutMs) {
                 _lastFix.timestamp   = millis();
                 _lastFix.hdop        = _gps.HDOP;
                 _lastFix.satellites  = _gps.satellites;
+#ifdef DEBUG_GPS_QUALITY
+                _lastFix.fixQuality  = _gps.fixquality;
+#endif
                 _lastFix.valid       = true;
                 return true;
             }

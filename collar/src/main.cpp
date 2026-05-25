@@ -17,6 +17,9 @@
 // Uncomment to disable deep sleep (keeps USB-CDC alive for serial monitoring)
 // #define DEBUG_NO_DEEP_SLEEP
 
+// Uncomment to enable GGA sentences and print fix quality (0=none,1=GPS,2=DGPS/SBAS)
+// #define DEBUG_GPS_QUALITY
+
 // ============================================
 // TIMING CONSTANTS
 // ============================================
@@ -144,6 +147,12 @@ static void runCycle() {
         Serial.print("Latitude:  "); Serial.println(pos.lat, 6);
         Serial.print("Longitude: "); Serial.println(pos.lon, 6);
         Serial.print("Satellites: "); Serial.println(fix.satellites);
+#ifdef DEBUG_GPS_QUALITY
+        Serial.print("Fix quality: "); Serial.print(fix.fixQuality);
+        if      (fix.fixQuality == 2) Serial.println(" (DGPS/SBAS active)");
+        else if (fix.fixQuality == 1) Serial.println(" (GPS only — no SBAS)");
+        else                          Serial.println(" (invalid)");
+#endif
     } else {
         Serial.println("No GPS fix — using last known position");
     }
