@@ -95,6 +95,33 @@ spi:
   miso_pin: GPIO12
   interface: spi2
 
+uart:
+  id: gps_uart
+  rx_pin:
+    number: GPIO7
+    ignore_pin_validation_error: true
+  tx_pin: GPIO32
+  baud_rate: 9600
+
+gps:
+  uart_id: gps_uart
+  latitude:
+    name: "Basestation Latitude"
+    id: basestation_latitude
+    accuracy_decimals: 6
+  longitude:
+    name: "Basestation Longitude"
+    id: basestation_longitude
+    accuracy_decimals: 6
+  altitude:
+    name: "Basestation Altitude"
+    id: basestation_altitude
+    accuracy_decimals: 1
+  satellites:
+    name: "Basestation GPS Satellites"
+    id: basestation_satellites
+    accuracy_decimals: 0
+
 sx127x:
   id: lora_radio
   cs_pin: GPIO26

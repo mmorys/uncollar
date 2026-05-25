@@ -9,6 +9,13 @@
 [Vendor Page](https://www.adafruit.com/product/5426)
 [Adafrui guide](https://learn.adafruit.com/adafruit-qt-py-esp32-s3)
 
+**Adafruit QT Py ESP32 Pico v3 WiFi Dev Board*
+
+- Quantity: 1
+
+[Vendor Page](https://www.adafruit.com/product/5395)
+[Adafrui guide](https://learn.adafruit.com/adafruit-qt-py-esp32-pico)
+
 **Adafruit ItsyBitsy M4 Express ATSAMD51**
 
 *This Itsy is like a bullet train, with it's 120MHz Cortex M4 with floating point support and 512KB Flash and 192KB RAM.*
