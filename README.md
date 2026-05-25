@@ -108,7 +108,8 @@ Each subsystem exposes a pure-virtual C++ interface so implementations are swapp
 |---|---|---|
 | `PositionReport` | Collar → Base | Lat/lon, fix quality, inside/outside boundary, battery |
 | `BoundaryAlert` | Collar → Base | Immediate notification on boundary crossing |
-| `ConfigUpdate` | Base → Collar | Updated home position and geofence vertices |
+| `ConfigUpdate` | Base → Collar | Updated home position, geofence, and warn settings |
+| `WarnEnable` | Base → Collar | Enable or disable outside-boundary warnings |
 
 ### Software Architecture Diagram
 
@@ -137,6 +138,171 @@ graph TD
     BS -->|ESPHome native API| HA[Home Assistant]
     HA --> UI[User Interface]
 ```
+
+## Home Assistant Entities & Services
+
+Once the base station is added to Home Assistant, the following entities are available:
+
+### Sensors
+
+| Entity | Description |
+|---|---|
+| Dog Latitude | Last reported latitude in decimal degrees |
+| Dog Longitude | Last reported longitude in decimal degrees |
+| Dog GPS Satellites | Number of satellites used for the last fix |
+| Collar Battery | Battery voltage in mV (0 until a battery sensor is wired) |
+| LoRa RSSI | Signal strength of the last received LoRa packet (dBm) |
+
+### Binary Sensors
+
+| Entity | Description |
+|---|---|
+| Dog Inside Boundary | `on` while the collar reports inside the geofence |
+| Boundary Alert | `on` while the dog is outside the geofence (inverse of Dog Inside Boundary, useful for HA notifications) |
+
+### Text Sensors
+
+| Entity | Description |
+|---|---|
+| Config Update Status | `Queued` while a config packet is pending delivery; `Sent` after it is transmitted |
+
+### Switches
+
+| Entity | Description |
+|---|---|
+| Collar Boundary Warnings | Enables or disables the collar's audible/vibration warning when outside the boundary. Toggling queues a `WarnEnable` packet delivered to the collar on its next check-in. State is restored on basestation reboot. |
+
+### Services
+
+#### `esphome.uncollar_basestation_send_boundary_update`
+
+Queues a full configuration update for delivery to the collar. The packet is transmitted the next time the collar sends a position report (within one wake cycle, typically ≤ 5 seconds).
+
+| Parameter | Type | Description |
+|---|---|---|
+| `default_lat` | `float` | Home position latitude — used in position reports when no GPS fix is available |
+| `default_lon` | `float` | Home position longitude |
+| `boundary_lats` | `float[]` | Ordered list of geofence vertex latitudes (3–16 vertices) |
+| `boundary_lons` | `float[]` | Ordered list of geofence vertex longitudes (must be the same length as `boundary_lats`) |
+| `warn_after_seconds` | `int` | How long the collar must be continuously outside the boundary before the first warning fires |
+| `repeat_warn_seconds` | `int` | How long between subsequent warnings while the dog remains outside |
+| `warn_action` | `int` | Which actuator fires: `0` = beep, `1` = vibrate |
+
+All parameters are persisted to NVS on the collar and restored after a power cycle.
+
+---
+
+## Configuration Reference
+
+All collar configuration is stored in ESP32 NVS under the namespace `uncollar_cfg` and survives both deep sleep and full power cycles. Default values are written on the very first boot.
+
+### Geofence & Home Position
+
+| NVS Key | Type | Default | Description |
+|---|---|---|---|
+| `cfg_lat` | `float` | `40.72272` | Home position latitude (NYC Central Park — change for your location) |
+| `cfg_lon` | `float` | `-74.02116` | Home position longitude |
+| `cfg_bnd_cnt` | `uint8` | `4` | Number of boundary polygon vertices (3–16) |
+| `cfg_bnd_N_lat` | `float` | See below | Latitude of vertex N |
+| `cfg_bnd_N_lon` | `float` | See below | Longitude of vertex N |
+
+The default boundary is a ~100 m × 100 m square centred on the default home position. Replace it with your actual yard polygon via `send_boundary_update`.
+
+### Outside-Boundary Warnings
+
+| NVS Key | Type | Default | Description |
+|---|---|---|---|
+| `cfg_warn_aft` | `uint16` | `30` | Seconds the collar must be continuously outside the boundary before the first warning fires |
+| `cfg_warn_rep` | `uint16` | `30` | Seconds between subsequent warnings while still outside |
+| `cfg_warn_act` | `uint8` | `0` (beep) | Actuator: `0` = beep, `1` = vibrate |
+| `cfg_warn_on` | `bool` | `true` | Master enable for outside-boundary warnings |
+
+`cfg_warn_aft` and `cfg_warn_rep` are set via `send_boundary_update`. `cfg_warn_on` is set via the **Collar Boundary Warnings** switch in HA.
+
+### Firmware Compile-Time Constants
+
+These are not user-configurable at runtime; change them in `collar/src/main.cpp` and reflash.
+
+| Constant | Value | Description |
+|---|---|---|
+| `GPS_UPDATE_INTERVAL_US` | `5 000 000 µs` (5 s) | Deep-sleep duration between wake cycles |
+| `GPS_FIX_TIMEOUT_MS` | `3 000 ms` | Maximum time to wait for a GPS fix per wake |
+| `CONFIG_RECEIVE_TIMEOUT_MS` | `2 000 ms` | Receive window after each position report, long enough for a max-size `ConfigUpdate` at SF9/125 kHz |
+
+---
+
+## Boundary & Warning Behavior
+
+### Geofence Definition
+
+The boundary is a closed polygon defined by 3–16 GPS vertices in order (clockwise or counter-clockwise both work). The point-in-polygon test uses the ray-casting even-odd rule with a bounding-box pre-check for efficiency. The polygon does not close automatically — the last vertex connects back to the first.
+
+Vertices are set via the `boundary_lats` / `boundary_lons` arrays in `send_boundary_update` and are stored in NVS so they survive power cycles.
+
+### Position Determination
+
+On every wake cycle the collar attempts to acquire a GPS fix (up to `GPS_FIX_TIMEOUT_MS` = 3 s). Three outcomes are possible:
+
+1. **Fresh fix acquired** — position is used directly; `lastFix` RTC variable is updated.
+2. **No fix, `lastFix` valid** — the most recent saved position is used; a note is logged but no warning is suppressed.
+3. **No fix, no `lastFix`** — first boot only. The hardcoded `DEFAULT_LATITUDE` / `DEFAULT_LONGITUDE` is used, which reports as inside the default boundary. Replace defaults before deploying.
+
+Because the last known position is used when the GPS cannot get a fix, brief signal loss (e.g., inside a building) will not immediately trigger a warning — the collar continues to report the last known location.
+
+### Wake Cycle & Timing Quantization
+
+The collar wakes every 5 seconds, runs its check, then sleeps again. All warning durations are therefore **quantized to 5-second multiples**: a `warn_after_seconds` value of 12 means the first warning fires at 15 s (the first wake cycle where `cyclesOutside × 5 ≥ 12`), not at exactly 12 s. The maximum overshoot is one sleep interval (4 s with the default 5 s interval).
+
+### Outside-Boundary Streak
+
+The collar maintains two counters in RTC memory that survive deep sleep:
+
+- **`cyclesOutside`** — increments by 1 each wake cycle spent outside; resets to 0 the first cycle the collar is inside.
+- **`cyclesSinceWarn`** — tracks cycles since the most recent warning fired (0 = no warning has fired yet in this streak); resets to 0 with `cyclesOutside`.
+
+As soon as the collar finds itself inside the boundary all counters reset, the streak ends, and the next time it exits the boundary the full `warn_after_seconds` delay applies again.
+
+### Warning Sequence
+
+```
+  ← warnAfterSeconds →← repeatWarnSeconds →← repeatWarnSeconds →
+  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐
+  │  │  │  │  │  │  │W │  │  │  │  │  │W │  │  │  │  │  │W │  ...
+  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘
+  Outside ──────────────────────────────────────────────────►
+  W = warning fires (beep or vibrate)
+  Each box = one 5 s wake cycle
+```
+
+1. The collar exits the boundary → `cyclesOutside` starts incrementing.
+2. When `cyclesOutside × 5 ≥ warn_after_seconds` → **first warning fires**.
+3. The repeat timer starts. When `cyclesSinceWarn × 5 ≥ repeat_warn_seconds` → **warning fires again**.
+4. Step 3 repeats indefinitely until the collar returns inside.
+5. On re-entry all counters reset.
+
+Note: `cyclesSinceWarn` increments even when warnings are disabled. This means if you disable warnings while the dog is outside and then re-enable them, the repeat cadence resumes mid-streak rather than starting over.
+
+### Warnings Enabled / Disabled
+
+The **Collar Boundary Warnings** HA switch controls whether the actuator (beep or vibrate) fires. When disabled:
+
+- Streak counters still advance normally.
+- `warn_outside_boundary()` is not called — no beep or vibrate.
+- The `Dog Inside Boundary` sensor and `Boundary Alert` sensor in HA are **not affected** — position reporting and geofence status continue regardless of this setting.
+- The setting is delivered to the collar as a `WarnEnable` packet and persisted to NVS, so it survives power cycles.
+
+The packet is queued exactly like a `ConfigUpdate` and delivered on the next PositionReport. The collar's receive window is 2 s; if the collar misses the packet (e.g., radio initialisation fails), the switch state in HA and the collar's NVS will be out of sync until the next successful delivery.
+
+### Warn Action
+
+Two actuators are supported:
+
+| Value | Action | Notes |
+|---|---|---|
+| `0` (beep) | `beep()` | Default. GPIO implementation pending hardware installation. |
+| `1` (vibrate) | `vibrate()` | GPIO implementation pending hardware installation. |
+
+The actuator is selected by `warn_action` in `send_boundary_update` and stored in NVS.
 
 ## Installation (Nominal - To Be Completed)
 

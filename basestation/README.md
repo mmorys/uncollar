@@ -46,7 +46,8 @@ Wire message types are defined in [collar/lib/radio/radio.h](../collar/lib/radio
 |---|---|---|
 | `PositionReport` | Collar → Base | Lat/lon, satellites, inside/outside boundary, battery |
 | `BoundaryAlert` | Collar → Base | Immediate notification on boundary crossing |
-| `ConfigUpdate` | Base → Collar | Updated home position and geofence vertices |
+| `ConfigUpdate` | Base → Collar | Updated home position, geofence vertices, and warn settings |
+| `WarnEnable` | Base → Collar | Enable or disable outside-boundary warnings |
 
 ### LoRa RF parameters
 
@@ -74,4 +75,6 @@ Once added to HA, the basestation exposes:
 | Collar Battery | Sensor | Battery voltage (mV) |
 | LoRa RSSI | Sensor | Signal strength of last received packet (dBm) |
 | Dog Inside Boundary | Binary sensor | Current geofence status |
-| Boundary Alert | Binary sensor | True when dog has exited the boundary |
+| Boundary Alert | Binary sensor | `on` while dog is outside the boundary |
+| Config Update Status | Text sensor | `Queued` / `Sent` delivery status of the last config packet |
+| Collar Boundary Warnings | Switch | Enable or disable the collar's warn actuator (beep/vibrate) |

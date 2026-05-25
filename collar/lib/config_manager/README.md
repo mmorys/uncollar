@@ -1,119 +1,59 @@
-# ConfigManager Library
+# ConfigManager
 
-Configuration management for Uncollar GPS collar using ESP32 Non-Volatile Storage (NVS).
+Persistent configuration for the Uncollar collar firmware using ESP32 NVS (Non-Volatile Storage).
 
-## Overview
-
-This library provides persistent storage for:
-- Default latitude and longitude
-- Geofence boundary vertices
-
-Configuration persists across power cycles using ESP32's NVS (Non-Volatile Storage). On first boot, default values are used and automatically saved. When updated via LoRa (future feature), values persist.
-
-## Features
-
-- **NVS Persistence**: Configuration survives power cycles and deep sleep
-- **Default Fallback**: Automatically uses defaults on first boot
-- **Runtime Updates**: Support for updating config via LoRa (future)
-- **Memory Efficient**: Dynamic boundary vertex allocation
-
-## Default Values
-
-| Parameter | Default |
-|-----------|---------|
-| Latitude | 40.72272f |
-| Longitude | -74.02116f |
-| Boundary | 100m x 100m square around default location |
-
-## Usage
-
-### Basic Usage
-
-```cpp
-#include "config_manager.h"
-
-// Declare config manager instance
-ConfigManager configManager;
-
-void setup() {
-    // Initialize - loads from NVS or uses defaults
-    if (!configManager.begin()) {
-        Serial.println("Failed to initialize config!");
-        return;
-    }
-    
-    // Get configuration values
-    float lat = configManager.getDefaultLatitude();
-    float lon = configManager.getDefaultLongitude();
-    
-    // Get boundary vertices for Polygon
-    const GeoPoint* vertices = configManager.getBoundaryVertices();
-    size_t count = configManager.getBoundaryVertexCount();
-    
-    // Create polygon
-    Polygon boundary(vertices, count);
-}
-```
-
-### Updating Configuration (Future LoRa)
-
-```cpp
-// Example: Update boundary via LoRa command
-void updateBoundary(const GeoPoint* newVertices, size_t newCount) {
-    configManager.setBoundaryVertices(newVertices, newCount);
-    configManager.save();  // Persist to NVS
-}
-```
-
-### Reset to Defaults
-
-```cpp
-// Reset all configuration to defaults
-configManager.resetToDefaults();
-```
-
-## API Reference
-
-### Methods
-
-| Method | Description |
-|--------|-------------|
-| `begin()` | Initialize and load config from NVS |
-| `load()` | Load config from NVS, fallback to defaults |
-| `save()` | Save current config to NVS |
-| `resetToDefaults()` | Reset config to defaults and save |
-| `getDefaultLatitude()` | Get default latitude |
-| `getDefaultLongitude()` | Get default longitude |
-| `getBoundaryVertices()` | Get boundary vertex array |
-| `getBoundaryVertexCount()` | Get number of boundary vertices |
-| `getConfig()` | Get full Config struct |
-| `setDefaultLatitude(float)` | Set default latitude |
-| `setDefaultLongitude(float)` | Set default longitude |
-| `setBoundaryVertices(GeoPoint*, size_t)` | Set boundary vertices |
+All values survive deep sleep and full power cycles. On first boot, defaults are written to NVS automatically.
 
 ## NVS Keys
 
-The following keys are used in the `uncollar_cfg` namespace:
+Namespace: `uncollar_cfg`
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `cfg_lat` | float | Default latitude |
-| `cfg_lon` | float | Default longitude |
-| `cfg_bnd_cnt` | uint8_t | Boundary vertex count |
-| `cfg_bnd_X_lat` | float | Vertex X latitude |
-| `cfg_bnd_X_lon` | float | Vertex X longitude |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `cfg_lat` | `float` | `40.72272` | Home position latitude |
+| `cfg_lon` | `float` | `-74.02116` | Home position longitude |
+| `cfg_bnd_cnt` | `uint8` | `4` | Number of boundary polygon vertices |
+| `cfg_bnd_N_lat` | `float` | *(square around default)* | Latitude of vertex N (0-based) |
+| `cfg_bnd_N_lon` | `float` | *(square around default)* | Longitude of vertex N |
+| `cfg_warn_aft` | `uint16` | `30` | Seconds outside boundary before first warning fires |
+| `cfg_warn_rep` | `uint16` | `30` | Seconds between repeat warnings while still outside |
+| `cfg_warn_act` | `uint8` | `0` | Warn actuator: `0` = beep, `1` = vibrate |
+| `cfg_warn_on` | `bool` | `true` | Master enable for outside-boundary warnings |
 
-## Requirements
+## Interface
 
-- ESP32 or ESP32-S3 (any ESP32 variant with NVS support)
-- Arduino framework
-- Preferences library (included in ESP32 Arduino core)
+`ConfigManager` implements `IConfigManager`, which decouples collar logic from the NVS backend so the config layer can be mocked in native tests.
 
-## File Structure
+```cpp
+// Initialization
+bool begin();           // open NVS, load or write defaults
+bool load();            // read from NVS (called by begin())
+bool save();            // flush all fields to NVS
+bool resetToDefaults(); // restore factory defaults and save
 
+// Home position
+GeoPoint getDefaultPosition() const;
+void     setDefaultPosition(float lat, float lon);
+
+// Geofence polygon
+const GeoPoint* getBoundaryVertices()    const;
+size_t          getBoundaryVertexCount() const;
+bool            setBoundaryVertices(const GeoPoint* v, size_t count);
+
+// Warning timing & action
+uint16_t   getWarnAfterSeconds()  const;
+uint16_t   getRepeatWarnSeconds() const;
+WarnAction getWarnAction()        const;
+bool       getWarningsEnabled()   const;
+
+void setWarnAfterSeconds(uint16_t s);
+void setRepeatWarnSeconds(uint16_t s);
+void setWarnAction(WarnAction a);
+void setWarningsEnabled(bool enabled);
 ```
-lib/config_manager/
-├── config_manager.h    # Header with class definition
-├── config_manager.cpp  # Implementation
-└── README.md           # This file
-```
+
+## Constraints
+
+- Boundary vertex count: 3–16 (`MIN_BOUNDARY_VERTICES` / `MAX_BOUNDARY_VERTICES`)
+- `ConfigManager` allocates heap memory for the vertex array; it is freed on destruction or when `setBoundaryVertices` is called with a different count
+- `WarnAction` is defined in `collar/lib/radio/radio.h` (shared with the wire protocol)
