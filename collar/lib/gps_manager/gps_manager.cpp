@@ -39,6 +39,8 @@ bool AdafruitGpsManager::begin() {
         if (_gps.begin(0x10)) {
             _gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
             _gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+            _gps.sendCommand("$PMTK313,1*2E");  // enable SBAS satellite search
+            _gps.sendCommand("$PMTK301,2*2E");  // set DGPS source to SBAS/WAAS
             return true;
         }
         delay(kRetryDelayMs);
