@@ -1,8 +1,18 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
-static const char AP_SSID[]  = "FTM_Responder";
-static const int  AP_CHANNEL = 1;
+// This single source is flashed to every anchor board. Each board's identity
+// (SSID) and channel are injected at build time so the same firmware can run on
+// multiple responders — see the ftm_responder_* environments in platformio.ini.
+#ifndef ANCHOR_NAME
+#define ANCHOR_NAME "FTM_Anchor_X"
+#endif
+#ifndef ANCHOR_CHANNEL
+#define ANCHOR_CHANNEL 1
+#endif
+
+static const char AP_SSID[]  = ANCHOR_NAME;
+static const int  AP_CHANNEL = ANCHOR_CHANNEL;
 
 void setup() {
     Serial.begin(115200);
@@ -19,8 +29,10 @@ void setup() {
         while (true) delay(1000);
     }
 
-    Serial.printf("AP up  SSID=%s  channel=%d  IP=%s\n",
+    // The initiator identifies anchors by BSSID, so print ours for reference.
+    Serial.printf("AP up  SSID=%s  channel=%d  BSSID=%s  IP=%s\n",
                   AP_SSID, AP_CHANNEL,
+                  WiFi.softAPmacAddress().c_str(),
                   WiFi.softAPIP().toString().c_str());
     Serial.println("FTM responder ready. Waiting for initiator...");
 }
