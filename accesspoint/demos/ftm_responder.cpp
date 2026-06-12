@@ -16,7 +16,9 @@ static const int  AP_CHANNEL = ANCHOR_CHANNEL;
 
 void setup() {
     Serial.begin(115200);
-    while (!Serial) delay(10);
+    // Don't block forever if no monitor is attached — anchors run headless.
+    uint32_t t0 = millis();
+    while (!Serial && millis() - t0 < 2000) delay(10);
 
     Serial.println("FTM Responder — starting");
 
