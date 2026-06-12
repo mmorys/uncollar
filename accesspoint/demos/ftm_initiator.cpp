@@ -163,6 +163,13 @@ void setup() {
     DBGLN("FTM Initiator (QT Py ESP32-S3 + LCD) — starting");
 
     Wire1.begin(LCD_SDA, LCD_SCL);
+
+    // The HD44780 controller needs time after power-on before it accepts its
+    // init sequence (~40 ms minimum). With DEBUG_SERIAL enabled the wait above
+    // happened to cover this; keep an explicit delay so the LCD initialises
+    // reliably regardless of whether serial is compiled in.
+    delay(250);
+
     lcd.begin(16, 2);
     lcd.backlight();
     lcd.setCursor(0, 0);
@@ -176,7 +183,16 @@ void setup() {
 }
 
 void loop() {
-    // Discover anchors once, then reuse the list for every measurement cycle.
+    // Periodically forget the anchor list and re-scan, so anchors that reboot
+    // or come online after the initiator does are picked up automatically.
+    static const int RESCAN_EVERY = 10; // measurement cycles between re-scans
+    static int cycles = 0;
+    if (++cycles >= RESCAN_EVERY) {
+        cycles = 0;
+        anchorCount = 0;
+    }
+
+    // (Re)discover anchors, then reuse the list for the next batch of cycles.
     if (anchorCount == 0) {
         if (discoverAnchors() == 0) {
             DBGLN("No anchors found — retrying in 3 s");
