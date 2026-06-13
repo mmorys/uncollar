@@ -1,0 +1,61 @@
+# Collar GPS track — lovelace-plotly-graph-card
+#
+# Shows the collar's path as a line with the current fix as a distinct marker.
+# Requires: https://github.com/dbuezas/lovelace-plotly-graph-card
+#
+# Paste the block below into a Manual card in the Lovelace dashboard editor.
+
+type: custom:plotly-graph
+raw_plotly_config: true
+hours_to_show: 0.0833
+refresh_interval: 60
+entities:
+  - entity: sensor.uncollar_basestation_dog_longitude
+    internal: true
+    fn: "$fn ({ xs, ys, vars }) => { vars.lons = ys; vars.ts = xs; }"
+  - entity: sensor.uncollar_basestation_dog_latitude
+    internal: true
+    fn: $fn ({ ys, vars }) => vars.lats = ys
+  - entity: ''
+    x: $fn ({ vars }) => vars.lons || []
+    y: $fn ({ vars }) => vars.lats || []
+    customdata: "$fn ({ vars }) => (vars.ts || []).map(t => new Date(t).toLocaleString())"
+    hovertemplate: "Lat: %{y:.6f}<br>Lon: %{x:.6f}<br>%{customdata}<extra></extra>"
+    mode: lines
+    name: Path
+    type: scatter
+    line:
+      color: "#4FC3F7"
+      width: 2
+  - entity: ''
+    x: "$fn ({ vars }) => vars.lons?.length ? [vars.lons.at(-1)] : []"
+    y: "$fn ({ vars }) => vars.lats?.length ? [vars.lats.at(-1)] : []"
+    mode: markers
+    name: Current
+    type: scatter
+    marker:
+      color: "#ef5350"
+      size: 14
+layout:
+  title:
+    text: Collar GPS Track
+    font:
+      size: 14
+  xaxis:
+    title:
+      text: Longitude
+    range:
+      - -84.081322
+      - -84.080614
+  yaxis:
+    title:
+      text: Latitude
+    range:
+      - 39.641439
+      - 39.641906
+  showlegend: true
+  margin:
+    l: 70
+    r: 20
+    t: 40
+    b: 60
